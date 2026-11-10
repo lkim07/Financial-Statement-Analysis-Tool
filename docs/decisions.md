@@ -5,6 +5,15 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 009. Install milvus-lite >= 3.0 explicitly
+*2026-11-10 · Phase 3*
+
+`pymilvus[milvus-lite]` silently skips milvus-lite on Windows (the extra is platform-restricted).
+milvus-lite 3.0 supports Windows, so it is declared as a direct dependency.
+Embedding model: `BAAI/bge-small-en-v1.5` (384 dims, local, free).
+
+---
+
 ## 008. LlamaParse as primary parser; PyMuPDF kept as baseline
 *2026-11-08 · Phase 2*
 
