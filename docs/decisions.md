@@ -6,6 +6,32 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 013. Golden evidence may list alternative locations
+*2026-11-12 · Phase 5*
+
+**Context**
+q03 was answered correctly from the EPS note (p60), but the golden set listed the diluted
+share counts only on p47, so evidence hit scored 0/2. Reporting which chunk actually matched
+revealed more repeats: the tax remeasurement sentence appears in MD&A (p32) and the income tax
+note (p77); the workforce reduction appears in MD&A (p31) and the restructuring note (p70).
+
+**Decision**
+- An evidence item may list `alternatives` (page + quote). Any one location counts as found.
+- `validate.py --pdf` checks every alternative quote against the PDF.
+- Retrieval output shows the page of the chunk that actually matched.
+
+**Results**
+- Without changing the system: retrieval quote recall@5 0.69 → 0.75, answer evidence hit 0.64 → 0.69.
+- Page recall is now computed per evidence item (was per unique page); earlier page recall
+  values are not comparable.
+- q03's buyback evidence still ranks 68+ even with a sentence-form alternative (p35):
+  the question never mentions buybacks (vocabulary gap, see 011).
+
+**Consequences**
+- New golden questions must check for repeated facts across MD&A, statements, and notes.
+
+---
+
 ## 012. Answers: three statuses, chunk-ID citations, code-side validation
 *2026-11-11 · Phase 4*
 

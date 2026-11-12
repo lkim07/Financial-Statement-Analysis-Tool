@@ -9,3 +9,5 @@
 | 2026-11-11 | chunks_llamaparse_v2_2 | 5 | False | True | 0.74 | 0.69 | 9 | body only |
 | 2026-11-11 | chunks_llamaparse_v2_2 | 5 | True | True | 0.74 | 0.69 | 9 | prefix + body only |
 | 2026-11-11 | chunks_llamaparse_v2_2 | 20 | False | False | 0.74 | 0.75 | 9 | k=20 ceiling |
+| 2026-11-12 | chunks_llamaparse_v2_2 | 5 | False | False | 0.81 | 0.75 | 9 | with alternatives |
+| 2026-11-12 | chunks_llamaparse_v2_2 | 5 | False | False | 0.81 | 0.75 | 9 | with alternatives |

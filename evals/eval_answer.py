@@ -60,7 +60,11 @@ def main(args) -> None:
         cited = {cid for s in answer.sentences for cid in s.citations}
         cited_text = " ".join(norm(c["text"]) for c in chunks if c["chunk_id"] in cited)
         if q["evidence"]:
-            hits = sum(norm(ev["quote"]) in cited_text for ev in q["evidence"])
+            # 원래 인용문이나 alternatives 중 하나라도 인용한 청크 안에 있으면 성공
+            hits = sum(
+                any(norm(opt["quote"]) in cited_text for opt in [ev, *ev.get("alternatives", [])])
+                for ev in q["evidence"]
+            )
             hit_scores.append(hits / len(q["evidence"]))
             hit_str = f"{hits}/{len(q['evidence'])}"
         else:

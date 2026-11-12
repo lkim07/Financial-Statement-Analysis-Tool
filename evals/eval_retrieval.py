@@ -1,11 +1,13 @@
 """Retrieval evaluation on the golden set: recall@k by page and by quote.
 
 Usage:
-    uv run --project backend python evals/eval_retrieval.py --collection chunks_llamaparse_v2_2 --k 5 --prefix --body-only --note "bge query prefix"
+    uv run --project backend python evals/eval_retrieval.py --collection chunks_llamaparse_v2_2
+    ... --k 5 --prefix --body-only --note "bge query prefix"
 
 Metrics (unanswerable questions are skipped):
-- page recall@k:  share of gold evidence pages that appear in the top-k chunks' locations
-- quote recall@k: share of gold evidence quotes contained in the top-k chunks' text
+- page recall@k:  share of gold evidence items whose page (or an alternative's page) is in the top-k
+- quote recall@k: share of gold evidence items whose quote (or an alternative's quote) is in the top-k
+An evidence item may list `alternatives`: the same fact stated elsewhere in the report.
 - gold rank:      where the chunk containing each quote ranks among ALL chunks (diagnosis)
 
 Every run appends one row to evals/results.md so experiments can be compared later.
@@ -47,15 +49,13 @@ def chunk_pages(entity: dict) -> set[int]:
 
 
 def evaluate(args) -> None:
-    golden = [json.loads(line) for line in GOLDEN.read_text(encoding="utf-8").splitlines() if line.strip()]
+    golden = [json.loads(line) for line in GOLDEN.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
     questions = [q for q in golden if q["type"] != "unanswerable"]
 
     model = SentenceTransformer(MODEL_NAME)
     client = MilvusClient(DB_PATH)
-    
     if not client.has_collection(args.collection):
         raise SystemExit(f"collection '{args.collection}' not found. available: {client.list_collections()}")
-
     client.load_collection(args.collection)  # 새로 연 DB는 released 상태라 먼저 불러온다
     total = client.get_collection_stats(args.collection)["row_count"]
 
@@ -79,23 +79,28 @@ def evaluate(args) -> None:
         )[0]
         top = hits[: args.k]
 
-        gold_pages = {ev["page"] for ev in q["evidence"]}
         top_pages = set().union(*(chunk_pages(h["entity"]) for h in top))
-        page_recall = len(gold_pages & top_pages) / len(gold_pages)
 
-        quote_hits, details = 0, []
+        page_hits, quote_hits, details = 0, 0, []
         for ev in q["evidence"]:
-            quote = norm(ev["quote"])
-            owners = [cid for cid, t in all_text.items() if quote in t]
+            # 같은 사실이 여러 곳에 있을 수 있다: 원래 위치나 alternatives 중 하나면 된다
+            options = [ev, *ev.get("alternatives", [])]
+            page_hits += any(opt["page"] in top_pages for opt in options)
+
+            owners = {cid for opt in options for cid, t in all_text.items() if norm(opt["quote"]) in t}
             if not owners:
                 details.append(f"    - p{ev['page']} NOT IN INDEX: {ev['quote']!r}")
                 continue
-            rank = next((i + 1 for i, h in enumerate(hits) if hit_id(h) in owners), None)
+            # 여러 위치 중 가장 높은 순위로 잡힌 것
+            ranked = [(i + 1, h) for i, h in enumerate(hits) if hit_id(h) in owners]
+            rank, best = ranked[0] if ranked else (None, None)
+            where = f"p{best['entity']['page']}" if best else f"p{ev['page']}"
             if rank is not None and rank <= args.k:
                 quote_hits += 1
-                details.append(f"    + p{ev['page']} rank {rank}: {ev['quote']!r}")
+                details.append(f"    + {where} rank {rank}: {ev['quote']!r}")
             else:
-                details.append(f"    - p{ev['page']} rank {rank}: {ev['quote']!r}")
+                details.append(f"    - {where} rank {rank}: {ev['quote']!r}")
+        page_recall = page_hits / len(q["evidence"])
         quote_recall = quote_hits / len(q["evidence"])
 
         page_scores.append(page_recall)
