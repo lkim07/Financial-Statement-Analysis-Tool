@@ -1,4 +1,4 @@
-"""Parsed pages -> chunks (v2.1: merge short blocks, split long ones, attach table captions).
+"""Parsed pages -> chunks (v2.2: merge short blocks, split long ones, attach table captions, shorten uneccessary empty space or --- marks).
 
 Usage: uv run --project backend python backend/ingest/chunk.py
 Reads:  data/parsed/llamaparse/page_*.json
@@ -114,9 +114,19 @@ class Chunker:
         self.flush()  # 남은 텍스트는 따로 청크로. 표는 일반 텍스트와 합치지 않는다
 
         caption_text = "\n".join(c["text"] for c in captions)
-        limit = self.body_limit(block["page"]) - (self.count(caption_text) + 1 if captions else 0)
-        for piece in split_table(block["text"], limit, self.count):
-            text = f"{caption_text}\n{piece}" if captions else piece
+        table_md = compact_table(block["text"])
+        page = (captions[0] if captions else block)["page"]
+        limit = self.body_limit(page) - (self.count(caption_text) + 1 if captions else 0)
+
+        # 안전장치: 실제 embed_text가 한도를 넘는 조각이 있으면, 한도를 줄여서 다시 자른다
+        for _ in range(5):
+            texts = [f"{caption_text}\n{p}" if captions else p for p in split_table(table_md, limit, self.count)]
+            longest = max(self.count(f"{self.context(page)}\n{t}") for t in texts)
+            if longest <= EMBED_LIMIT:
+                break
+            limit -= longest - EMBED_LIMIT + 10
+
+        for text in texts:
             self.emit(captions + [block], text, "table")
 
     # ---------- 진입점 ----------
@@ -145,9 +155,11 @@ class Chunker:
 
 
 def clean_heading(md: str) -> str:
-    """'# <u>CONSOLIDATED ...</u>' -> 'CONSOLIDATED ...'"""
+    """'# <u>**CONSOLIDATED ...**</u>' -> 'CONSOLIDATED ...'"""
     text = md.lstrip("#").strip()
-    return re.sub(r"<[^>]+>", "", text).strip()
+    text = re.sub(r"<[^>]+>", "", text)  # HTML 태그
+    text.replace("**", "").strip()  # 굵게(**) 표시
+    return text.replace("*", "").strip()
 
 
 def split_text(text: str, block_type: str, limit: int, count) -> list[str]:
@@ -184,6 +196,24 @@ def is_label_row(row: str) -> bool:
     """'| Weighted average number of shares: |  |  |  |' 처럼 첫 칸만 있고 나머지가 빈 행."""
     cells = [c.strip() for c in row.strip().strip("|").split("|")]
     return len(cells) > 1 and cells[0] != "" and all(c == "" for c in cells[1:])
+
+
+def compact_table(md: str) -> str:
+    """정렬용 공백과 긴 구분선을 줄인다.
+
+    '| ------------------ | ------- |' 의 '-' 하나하나가 토큰 하나라서, 넓은 표는 구분선만으로
+    100토큰 넘게 쓴다. 내용은 그대로 두고 '| --- | --- |' 로 줄인다.
+    """
+    lines = []
+    for line in md.split("\n"):
+        if not line.strip():
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if all(set(c) <= set("-: ") and c for c in cells):  # 구분선 행
+            lines.append("| " + " | ".join("---" for _ in cells) + " |")
+        else:
+            lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
 
 
 def split_table(md: str, limit: int, count) -> list[str]:
