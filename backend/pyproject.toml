@@ -10,6 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "llama-cloud>=1.0",
     "milvus-lite>=3.0",
+    "openai>=3.49.0",
     "pymilvus[milvus-lite]>=3.0.3",
     "pymupdf>=2.1",
     "sentence-transformers>=6.2.0",
