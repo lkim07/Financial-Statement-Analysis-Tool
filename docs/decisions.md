@@ -3,6 +3,41 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+
+---
+
+## 012. Answers: three statuses, chunk-ID citations, code-side validation
+*2026-11-11 · Phase 4*
+
+**Context**
+With a binary `answerable` flag, q01 ("why did net income decrease?") returned "no evidence"
+although the retrieved p30 table showed the decrease itself; only the cause was missing.
+Users would wrongly conclude the report has no answer.
+
+**Decision**
+- Structured output (OpenAI Structured Outputs, Pydantic schema):
+  `status` (answered / partial / no_evidence), `sentences[{text, citations, inferred}]`, `missing`.
+- `partial`: answer the supported part, state what is missing, never fill gaps with guesses.
+- The LLM cites chunk IDs only; code maps IDs to pages and bboxes.
+- Code validates every citation against the retrieved chunk IDs.
+- Every eval run saves all answers to `evals/runs/` for later review and judge scoring.
+
+**Results** (golden set, k=5, model `gpt-6-luna`)
+- status correct 10/10, citations valid 10/10, evidence hit 0.64 (retrieval quote recall@5: 0.69).
+- The gap is q05 only: a redundant source was retrieved but not cited.
+  Answer quality is currently capped by retrieval.
+- q01 now returns `partial` and names "taxes or non-operating items" as the missing drivers.
+- q03 returned `answered` with no gold evidence retrieved: [확인 결과]
+
+**Consequences**
+- Format and citation-ID checks cannot detect a sentence that cites a real chunk
+  but misstates it. A faithfulness check is needed (Phase 5).
+- q03 returned `answered` with gold evidence 0/2, but the answer was correct:
+  it cited the EPS note (p60), which repeats the diluted share counts the golden set
+  lists only on p47. The same fact often appears in several places (statements, notes, MD&A);
+  golden evidence needs alternatives (Phase 5). The answer stopped at "fewer shares"
+  and did not reach the buybacks behind it.
+
 ---
 
 ## 011. Retrieval baseline: plain dense search; "why" failures need decomposition, not tuning
