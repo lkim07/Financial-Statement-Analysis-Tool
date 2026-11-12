@@ -61,9 +61,15 @@ def is_noise(text: str, bbox: list[float], page_num: int) -> bool:
     # 머리글: 텍스트가 "Table of Contents"이고 페이지 위쪽에 있다
     if text=="Table of Contents" and bbox[1]<50:
         return True
-    # 바닥글: 텍스트가 그 페이지 번호와 같다
-    if text == str(page_num):
+    
+    # # 바닥글: 텍스트가 그 페이지 번호와 같다
+    # if text == str(page_num):
+    #     return True
+
+    # 숫자만 있고 3글자 이하일 때. 
+    if text.isdigit() == True and len(text)<=3:
         return True
+
     # 빈 블록: strip() 후 텍스트가 비었다
     if text == "":
         return True

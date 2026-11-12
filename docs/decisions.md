@@ -5,6 +5,74 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 011. Retrieval baseline: plain dense search; "why" failures need decomposition, not tuning
+*2026-11-11 · Phase 3*
+
+**Context**
+First golden-set run on `chunks_llamaparse_v2_2` (317 chunks, bge-small, FLAT/COSINE, k=5, 9 answerable questions).
+
+| setting | page recall@5 | quote recall@5 |
+|---|---|---|
+| baseline | 0.74 | 0.69 |
+| bge query prefix | 0.74 | 0.69 |
+| body only | 0.74 | 0.69 |
+| prefix + body only | 0.74 | 0.69 |
+
+- Raising k from 5 to 20 lifted quote recall only from 0.69 to 0.75 (q01's tax paragraph, rank 20);
+  q03, q04 and q08 evidence stayed out of reach (ranks 23–68). Page recall did not move (0.74),
+  so page-level scoring could not see this gain at all.
+- No quote was missing from the index: parsing and chunking lost nothing; all misses are retrieval misses.
+- numeric (q05–q07) and single-cause why (q02) were fully retrieved.
+- Multi-step why questions failed on their cause evidence: q01 tax paragraph (rank 20),
+  q03 share count and buybacks (rank 23, 68), q04 cash-flow investment gains (rank 50).
+  In each case the cause is described in different words than the question.
+
+**Decision**
+- Use plain queries without the bge prefix (no gain; misses ranked lower).
+- Keep the body-only filter available but off by default (no effect on this set).
+- Do not tune retrieval further for "why" questions. Phase 6 will decompose the change
+  numerically first and generate cause-specific queries.
+
+**Consequences**
+- 9 questions are too few to separate settings reliably; expand to 30–50 in Phase 5.
+- Chunking v1 vs v2.2 comparison (promised in 010) is still pending.
+
+---
+
+## 010. Chunking v2: merge across pages, split long tables, attach captions
+*2026-11-11 · Phase 3*
+
+**Context**
+v1 (one block = one chunk, LlamaParse output) produced 881 chunks.
+- 22 exceeded the embedding model's 512-token limit, so their tails were silently truncated.
+  16 were tables, incl. the p51 cash flow statement (1,001 tokens), whose later rows
+  (e.g. `Common stock repurchases`, evidence for golden q03) were unsearchable.
+- 236 were heading-only. Measuring length on `embed_text` hid this: the context header
+  alone is ~20 tokens, so short-chunk checks must measure `text`.
+
+**Decision**
+- Headings are not chunks; they become metadata and the context header.
+- Consecutive text/list blocks under one heading merge up to ~400 tokens, across page boundaries.
+- Long tables split into row groups; each piece repeats the header row and the latest section-label row.
+- Short captions before a table (ending with ":" or "(In millions ...)") are attached to every piece.
+- Table markdown is compacted: separator dashes are one token each, and wide tables
+  spent 100+ tokens per piece on them.
+- A guard re-splits any table whose actual `embed_text` exceeds 500 tokens.
+- Body and exhibits are never merged; "See accompanying Notes" boilerplate is dropped.
+
+**Rationale**
+For a tool that helps users reason about *why* results changed, richer context that lets
+users judge for themselves is worth more than narrower, more precise chunks.
+
+**Consequences**
+- v1 → v2.2: 881 → 317 chunks; >512 tokens: 22 → 0; short chunks: 236+ → 16,
+  mostly "None."-type items and tables LlamaParse labeled as text.
+- Larger chunks mean wider highlights; sentence-level highlighting can refine this later.
+- Section-label carry-over can attach a stale label after a section ends.
+- To be validated against v1 with recall@5 in 3-4.
+
+---
+
 ## 009. Install milvus-lite >= 3.0 explicitly
 *2026-11-10 · Phase 3*
 
