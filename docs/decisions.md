@@ -6,6 +6,27 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 014. Exclude exhibits from retrieval by default (supersedes part of 011)
+*2026-11-14 · Phase 5*
+
+**Context**
+011 kept the body-only filter off because it had no effect on 9 questions.
+On the 40-question set, q23 ("how many employees?") failed: three exhibit pages
+(the subsidiary list, p88–90) took top-5 slots and pushed the answer (p9) to rank 7.
+
+**Decision**
+Filter retrieval to `section == "body"` by default, in both evaluation and answer generation.
+
+**Results** (40 questions, 36 answerable)
+- quote recall@5 0.77 → 0.80, page recall@5 0.84 → 0.87. Only q23 changed (rank 7 → 4); no question got worse.
+
+**Consequences**
+- Exhibits (subsidiaries, auditor consent, certifications) are unreachable by default.
+  Questions that need them must be routed explicitly (Phase 7 router).
+- 9 questions were too few to see this effect; settings judged on small sets should be re-checked.
+
+---
+
 ## 013. Golden evidence may list alternative locations
 *2026-11-12 · Phase 5*
 
