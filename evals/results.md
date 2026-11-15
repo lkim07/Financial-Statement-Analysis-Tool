@@ -15,3 +15,5 @@
 | 2026-11-14 | chunks_llamaparse_v2_2 | 5 | False | False | 0.84 | 0.77 | 35 | 40 questions |
 | 2026-11-14 | chunks_llamaparse_v2_2 | 5 | False | True | 0.87 | 0.80 | 35 | 40q body only |
 | 2026-11-15 | chunks_llamaparse_v2_2 | 5 | False | True | 0.87 | 0.83 | 35 | 40q body only + norm fix |
+| 2026-11-15 | chunks_pymupdf_v2_2 | 5 | False | True | 0.88 | 0.74 | 35 | pymupdf v2.2 |
+| 2026-11-15 | chunks_llamaparse_v1 | 5 | False | True | 0.78 | 0.67 | 35 | llamaparse v1 |

@@ -1,8 +1,8 @@
-"""Parsed pages -> chunks (v2.2: merge short blocks, split long ones, attach table captions, shorten uneccessary empty space or --- marks).
+"""Parsed pages -> chunks (v2.1: merge short blocks, split long ones, attach table captions).
 
-Usage: uv run --project backend python backend/ingest/chunk.py
-Reads:  data/parsed/llamaparse/page_*.json
-Writes: data/chunks/llamaparse.jsonl
+Usage: uv run --project backend python backend/ingest/chunk.py [--parser llamaparse|pymupdf] [--strategy v2|v1]
+Reads:  data/parsed/<parser>/page_*.json
+Writes: data/chunks/<parser>.jsonl  (v1: data/chunks/<parser>_v1.jsonl)
 
 Rules (see docs/decisions.md 010):
 - Heading blocks are not chunks. They become each chunk's `heading` and context header.
@@ -132,7 +132,8 @@ class Chunker:
     # ---------- 진입점 ----------
 
     def add(self, block: dict, page: int) -> None:
-        block = {**block, "page": page}
+        # PyMuPDF 블록에는 type이 없다: 전부 일반 텍스트로 본다 (제목도 표도 구분하지 못한다)
+        block = {"type": "text", **block, "page": page}
         block_type = block["type"]
 
         # 본문 -> 첨부 서류로 넘어가면 앞 내용과 합치지 않고, 본문의 제목도 이어받지 않는다
@@ -158,8 +159,7 @@ def clean_heading(md: str) -> str:
     """'# <u>**CONSOLIDATED ...**</u>' -> 'CONSOLIDATED ...'"""
     text = md.lstrip("#").strip()
     text = re.sub(r"<[^>]+>", "", text)  # HTML 태그
-    text.replace("**", "").strip()  # 굵게(**) 표시
-    return text.replace("*", "").strip()
+    return text.replace("*", "").strip()  # 굵게(**)와 기울임(*) 표시
 
 
 def split_text(text: str, block_type: str, limit: int, count) -> list[str]:
@@ -258,6 +258,32 @@ def make_chunks(pages: list[dict], count_tokens) -> list[dict]:
     return chunker.chunks
 
 
+def make_chunks_v1(pages: list[dict]) -> list[dict]:
+    """v1 (decision 010 이전): 블록 하나 = 청크 하나. 제목 블록도 청크가 되고, 긴 블록도 자르지 않는다.
+
+    청킹 전략을 비교하려고 남겨 둔다. 실제 파이프라인에서는 쓰지 않는다.
+    """
+    chunks, heading = [], None
+    for page in pages:
+        section = "exhibit" if page["page"] >= EXHIBIT_START_PAGE else "body"
+        for block in page["blocks"]:
+            if block.get("type") == "heading":
+                heading = clean_heading(block["text"])
+            context = f"{DOC_NAME} | p{page['page']} | {heading or ''}"
+            chunks.append({
+                "chunk_id": f"c{len(chunks):04d}",
+                "page": page["page"],
+                "section": section,
+                "heading": heading,
+                "type": block.get("type", "text"),
+                "locations": [{"page": page["page"], "bbox": block["bbox"]}],
+                "source_ids": [block["id"]],
+                "text": block["text"],
+                "embed_text": f"{context}\n{block['text']}",
+            })
+    return chunks
+
+
 def report(chunks: list[dict], count_tokens) -> None:
     """청크 통계. 512 초과는 embed_text로, 너무 짧음은 본문(text)으로 잰다."""
     embed_lengths = [count_tokens(c["embed_text"]) for c in chunks]
@@ -290,7 +316,15 @@ def save_jsonl(chunks: list[dict], path: Path) -> None:
 
 
 if __name__ == "__main__":
-    parsed_dir = Path("data/parsed/llamaparse")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Parsed pages -> chunks")
+    parser.add_argument("--parser", default="llamaparse", choices=["llamaparse", "pymupdf"])
+    parser.add_argument("--strategy", default="v2", choices=["v2", "v1"])
+    parser.add_argument("--out", type=Path, help="default: data/chunks/<parser>.jsonl (v2) or <parser>_v1.jsonl")
+    args = parser.parse_args()
+
+    parsed_dir = Path("data/parsed") / args.parser
     pages = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(parsed_dir.glob("page_*.json"))]
 
     model = SentenceTransformer("BAAI/bge-small-en-v1.5")
@@ -300,6 +334,7 @@ if __name__ == "__main__":
         # 특수 토큰([CLS], [SEP])은 빼고 센다. EMBED_LIMIT에 그 자리를 남겨 두었다
         return len(tokenizer.encode(text, add_special_tokens=False))
 
-    chunks = make_chunks(pages, count_tokens)
+    chunks = make_chunks(pages, count_tokens) if args.strategy == "v2" else make_chunks_v1(pages)
     report(chunks, count_tokens)
-    save_jsonl(chunks, Path("data/chunks/llamaparse.jsonl"))
+    suffix = "" if args.strategy == "v2" else "_v1"
+    save_jsonl(chunks, args.out or Path(f"data/chunks/{args.parser}{suffix}.jsonl"))

@@ -5,6 +5,39 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 017. Parser and chunking compared on the 40-question set: keep LlamaParse + v2.2
+*2026-11-15 · Phase 5 · closes the open checks in 008 and 010*
+
+**Context**
+008 chose LlamaParse after a visual comparison of 4 pages; 010 adopted chunking v2 without
+measuring it against v1. Both were to be checked with recall.
+
+**Results** (body-only, k=5, bge-small, 36 answerable questions)
+
+| parser | chunking | page recall@5 | quote recall@5 |
+|---|---|---|---|
+| LlamaParse | v2.2 | 0.87 | **0.83** |
+| PyMuPDF | v2.2 | 0.88 | 0.74 |
+| LlamaParse | v1 | 0.78 | 0.67 |
+
+- Chunking mattered more than the parser: v1 → v2.2 +16 points; PyMuPDF → LlamaParse +9 points.
+- LlamaParse won mostly on tables (q06, q22, q27, q40) and where headings separate topics (q23).
+- PyMuPDF won q01's tax paragraph (rank 1 vs 20): without headings, cause and effect landed
+  in one chunk. v1 won single-sentence facts (q18, q23) that v2.2's larger chunks dilute.
+- Page recall ranked PyMuPDF first; quote recall did not. Page-level scoring is misleading.
+
+**Decision**
+Keep LlamaParse + chunking v2.2.
+
+**Consequences**
+- Golden quotes were validated on PyMuPDF text, which slightly favors PyMuPDF in matching;
+  LlamaParse's real advantage may be larger.
+- Next ideas: small-to-big retrieval (search small units, pass the parent chunk to the LLM),
+  and keeping a cause paragraph with the table it explains.
+- One document only; re-check when more documents are added (Phase 6).
+
+---
+
 ## 016. Faithfulness judge: sentence-level LLM judge, validated by human labels and planted errors
 *2026-11-15 · Phase 5*
 
