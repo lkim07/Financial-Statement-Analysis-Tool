@@ -61,6 +61,7 @@ def retrieve(question: str, collection: str, k: int, embedder, milvus) -> list[d
         data=vec.tolist(),
         limit=k,
         output_fields=["text", "page", "heading", "locations"],
+        filter='section == "body"',  # decision 014: 첨부 서류는 기본으로 제외
     )[0]
     return [{"chunk_id": h.get("id", h.get("chunk_id")), **h["entity"]} for h in hits]
 

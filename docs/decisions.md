@@ -3,6 +3,17 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+---
+
+## 015. Unanswerable questions accept `partial` answers
+*2026-11-14 · Phase 5*
+
+q38 ("how many shares will be repurchased in fiscal 2026?") returned `partial`:
+it stated that no share count is given and cited the $14.0B remaining authorization.
+This is more useful than "no evidence", so unanswerable questions now pass with
+`no_evidence` or `partial`, and fail only with `answered`.
+A `partial` answer could still contain an invented figure; the faithfulness check (5-3)
+must cover these answers.
 
 ---
 

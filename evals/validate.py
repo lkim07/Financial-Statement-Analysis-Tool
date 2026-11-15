@@ -142,6 +142,10 @@ def main() -> int:
 
     counts = {t: sum(r["type"] == t for r in rows) for t in sorted(VALID_TYPES)}
     print(f"OK: 질문 {len(rows)}개, 유형별 {counts}")
+    # 초안(source: claude-draft) 중 사람이 아직 검증하지 않은 것
+    unverified = [r["id"] for r in rows if r.get("verified") is False]
+    if unverified:
+        print(f"아직 검증 안 됨 {len(unverified)}개: {', '.join(unverified)}")
     return 0
 
 

@@ -11,3 +11,7 @@
 | 2026-11-11 | chunks_llamaparse_v2_2 | 20 | False | False | 0.74 | 0.75 | 9 | k=20 ceiling |
 | 2026-11-12 | chunks_llamaparse_v2_2 | 5 | False | False | 0.81 | 0.75 | 9 | with alternatives |
 | 2026-11-12 | chunks_llamaparse_v2_2 | 5 | False | False | 0.81 | 0.75 | 9 | with alternatives |
+| 2026-11-14 | chunks_llamaparse_v2_2 | 5 | False | False | 0.81 | 0.75 | 9 | 40 questions |
+| 2026-11-14 | chunks_llamaparse_v2_2 | 5 | False | False | 0.84 | 0.77 | 35 | 40 questions |
+| 2026-11-14 | chunks_llamaparse_v2_2 | 5 | False | True | 0.87 | 0.80 | 35 | 40q body only |
+| 2026-11-15 | chunks_llamaparse_v2_2 | 5 | False | True | 0.87 | 0.83 | 35 | 40q body only + norm fix |

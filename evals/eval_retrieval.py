@@ -35,6 +35,7 @@ def norm(text: str) -> str:
     text = re.sub(r"[*#|]", " ", text)
     text = text.replace("\xa0", " ")
     text = re.sub(r"\s+%", "%", text)
+    text = text.replace("\\", " ")   # 마크다운 이스케이프(\*) 제거
     return re.sub(r"\s+", " ", text).strip().lower()
 
 

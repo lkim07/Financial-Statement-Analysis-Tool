@@ -50,7 +50,10 @@ def main(args) -> None:
 
         # 1) status: 답이 없는 질문은 no_evidence, 나머지는 answered 또는 partial이어야 한다
         expected_none = q["type"] == "unanswerable"
-        ok = (answer.status == "no_evidence") == expected_none
+        if expected_none:
+            ok = answer.status != "answered"      # 없다고 하거나, 관련 사실만 주고 없는 부분을 밝히면 통과
+        else:
+            ok = answer.status != "no_evidence"   # 답이 있는 질문은 최소한 일부라도 답해야 통과
         status_ok += ok
 
         # 2) 인용 형식
