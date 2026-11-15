@@ -162,8 +162,10 @@ Users would wrongly conclude the report has no answer.
 
 ---
 
+
 ## 011. Retrieval baseline: plain dense search; "why" failures need decomposition, not tuning
 *2026-11-11 · Phase 3*
+**Status:** body-only part superseded by 014
 
 **Context**
 First golden-set run on `chunks_llamaparse_v2_2` (317 chunks, bge-small, FLAT/COSINE, k=5, 9 answerable questions).
@@ -198,6 +200,7 @@ First golden-set run on `chunks_llamaparse_v2_2` (317 chunks, bge-small, FLAT/CO
 
 ## 010. Chunking v2: merge across pages, split long tables, attach captions
 *2026-11-11 · Phase 3*
+**Status:** confirmed by 017 (v1 vs v2.2: quote recall 0.67 → 0.83)
 
 **Context**
 v1 (one block = one chunk, LlamaParse output) produced 881 chunks.
@@ -239,8 +242,10 @@ Embedding model: `BAAI/bge-small-en-v1.5` (384 dims, local, free).
 
 ---
 
+
 ## 008. LlamaParse as primary parser; PyMuPDF kept as baseline
 *2026-11-08 · Phase 2*
+**Status:** confirmed by 017 (40-question recall comparison)
 
 **Context**
 Pages 30, 32, 47, 80 of the Applied Materials FY2025 10-K were parsed with
