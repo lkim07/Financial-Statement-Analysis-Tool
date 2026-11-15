@@ -5,6 +5,24 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 018. CI runs lightweight checks only
+*2026-11-15 · Phase 5*
+
+**Decision**
+GitHub Actions runs on every PR and push to main:
+- `evals/validate.py evals/golden.jsonl` (structure only)
+- `pytest tests/` (chunking rules, golden-set tools)
+
+Not in CI: PDF quote checks (PDFs are not in the repo, 006), retrieval/answer/judge evals
+(need models, Milvus, API keys, and cost money). These stay manual and are logged in
+`evals/results*.md`.
+
+**Consequences**
+- `chunk.py` imports `sentence_transformers` lazily so tests do not pull in PyTorch.
+- Tests encode incidents we actually hit: glued JSONL lines, dangling section-label rows.
+
+---
+
 ## 017. Parser and chunking compared on the 40-question set: keep LlamaParse + v2.2
 *2026-11-15 · Phase 5 · closes the open checks in 008 and 010*
 

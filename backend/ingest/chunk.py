@@ -21,7 +21,6 @@ import re
 import statistics
 from pathlib import Path
 
-from sentence_transformers import SentenceTransformer
 
 DOC_NAME = "Applied Materials FY2025 10-K"
 EXHIBIT_START_PAGE = 88  # p88부터는 첨부 서류(Exhibit)
@@ -317,6 +316,10 @@ def save_jsonl(chunks: list[dict], path: Path) -> None:
 
 if __name__ == "__main__":
     import argparse
+
+    # 무거운 라이브러리(torch 포함)는 실제로 실행할 때만 불러온다.
+    # 덕분에 테스트와 CI는 이 파일의 순수 함수들을 가볍게 import할 수 있다.
+    from sentence_transformers import SentenceTransformer
 
     parser = argparse.ArgumentParser(description="Parsed pages -> chunks")
     parser.add_argument("--parser", default="llamaparse", choices=["llamaparse", "pymupdf"])
