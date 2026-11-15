@@ -1,0 +1,27 @@
+# PR과 main 푸시마다 평가셋 형식과 순수 함수 테스트를 돌린다.
+# 모델(torch)이나 원본 PDF가 필요 없는 검사만 한다 (decision 006: PDF는 리포에 없다).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test tools
+        run: pip install pytest
+
+      - name: Validate golden set (structure only, no PDF)
+        run: python evals/validate.py evals/golden.jsonl
+
+      - name: Unit tests
+        run: pytest -q tests

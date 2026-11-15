@@ -1,0 +1,151 @@
+﻿key,inferred,sentence,sources,human_label
+q19-s2,False,"A majority of its products and services are delivered outside the United States, including to China, Taiwan and Korea, and it purchases a significant portion of its equipment and supplies from foreign suppliers.","[c0036] A majority of our products and services are delivered to customers in jurisdictions outside of the United States, including China, Taiwan and Korea. We also purchase a significant portion of equipment and supplies from suppliers outside of the United States. There is inherent risk, based on the complex relationships among the United States and the countries in which we conduct our business, that political, diplomatic and national security factors can lead to global trade restrictions and changes in trade policies and export regulations that affect the semiconductor industry. The United States and other countries have imposed and may continue to impose new trade restrictions and export regulations, have levied tariffs and taxes on certain goods and could significantly increase or impose new tariffs on a broad array of goods. Trade restrictions and export regulations, or increased or new tariffs and additional taxes, including any retaliatory measures, can negatively impact end-user demand and customer investment in semiconductor equipment, increase our supply chain complexity and our manufacturing costs, decrease margins, reduce the competitiveness of our products, or restrict our ability to sell products, provide services or purchase necessary equipment and supplies, any or all of which could have a material and adverse effect on our business, results of operations, or financial condition.",supported
+q20-s1,False,"Total inventories at the end of FY2025 were $5,915 million as of October 26, 2025.","[c0219] |  | October 26, 2025 | October 27, 2024 |
+| --- | --- | --- |
+|  | (In | millions) |
+| Inventories |  |  |
+| Customer service spares | $ 1,786 | $ 1,742 |
+| Raw materials | 2,007 | 1,680 |
+| Work-in-process | 914 | 879 |
+| Finished goods |  |  |
+| Deferred cost of sales | 229 | 217 |
+| Evaluation inventory | 474 | 459 |
+| Manufactured on-hand inventory | 505 | 444 |
+| Total finished goods | 1,208 | 1,120 |
+| Total inventories | $ 5,915 | $ 5,421 |",supported
+q03-s1,True,"Diluted EPS is based on net income divided by the weighted average of common and dilutive potential shares; from 2024 to 2025, net income fell from $ 7,177 to $ 6,998, but the diluted-share denominator also fell from 834 to 808.","[c0187] Basic earnings per share is determined using the weighted average number of common shares outstanding during the period. Diluted earnings per share is determined using the weighted average number of common shares and potential common shares (representing the dilutive effect of restricted stock units and employees’ stock purchase plan shares) outstanding during the period. Our net income has not been adjusted for any period presented for purposes of computing basic or diluted earnings per share due to our non-complex capital structure. || [c0188] | Fiscal Year | 2025 | 2024 | 2023 |
+| --- | --- | --- | --- |
+|  | (In millions, except per share amounts) |  |  |
+| Numerator: |  |  |  |
+| Net income | $ 6,998 | $ 7,177 | $ 6,856 |
+| Denominator: |  |  |  |
+| Weighted average common shares outstanding | 804 | 827 | 840 |
+| Effect of weighted dilutive restricted stock units and employees’ stock purchase plan shares | 4 | 7 | 5 |
+| Denominator for diluted earnings per share | 808 | 834 | 845 |
+| Basic earnings per share | $ 8.71 | $ 8.68 | $ 8.16 |
+| Diluted earnings per share | $ 8.66 | $ 8.61 | $ 8.11 |
+| Potentially weighted dilutive securities | — | — | — |",supported
+q12-s1,False,"RD&E expenses increased primarily because of additional headcount supporting ongoing product development initiatives and higher depreciation expenses, consistent with the company’s growth strategy.","[c0100] The year-over-year change in RD&E expenses was primarily due to additional headcount to support our ongoing investments in product development initiatives and higher depreciation expenses, consistent with our growth strategy. We continued to prioritize RD&E investments in technical capabilities and critical RD&E programs in current and new markets.
+
+Marketing and selling expenses for fiscal 2025 increased primarily due to higher employee related expenses.
+
+General and administrative expenses in fiscal 2025 decreased primarily due to lower spending on professional services, partially offset by an impairment of goodwill of $41 million recognized during the fourth quarter of fiscal 2025.
+
+In the fourth quarter of fiscal 2025, we approved a workforce reduction plan (Fiscal 2025 Restructuring Plan) to position us for continued growth as a more competitive and productive organization and expect approximately 4% of our global workforce to be impacted under this plan. In the fourth quarter of fiscal 2025, we recognized $181 million of restructuring charges consisting primarily of severance and other employment termination benefits to be paid in cash, and other non-cash related charges. We expect to complete the plan in fiscal 2026.",supported
+q26-s1,False,"In FY2025, Applied Materials paid an average of $ 162.85 per share including excise tax, or $ 161.54 excluding excise tax.","[c0236] The following table summarizes our stock repurchases, including and excluding excise tax, for each fiscal year:
+|  | 2025 | 2024 | 2023 |
+| --- | --- | --- | --- |
+|  | (In millions, | except per share | amounts) |
+| Shares of common stock repurchased | 30 | 20 | 18 |
+| Cost of stock repurchased (including excise tax)\* | $ 4,893 | $ 3,851 | $ 2,202 |
+| Average price paid per share (including excise tax)\* | $ 162.85 | $ 190.27 | $ 123.63 |
+| Cost of stock repurchased (excluding excise tax) | $ 4,853 | $ 3,823 | $ 2,189 |
+| Average price paid per share (excluding excise tax) | $ 161.54 | $ 188.87 | $ 122.89 |",supported
+q25-s1,False,"Approximately $14.0 billion remained available for future stock repurchases at October 26, 2025, the end of FY2025.","[c0235] In March 2025, our Board of Directors approved a common stock repurchase program authorizing $10.0 billion in repurchases, which supplemented the previous $10.0 billion authorization approved in March 2023. At October 26, 2025, approximately $14.0 billion remained available for future stock repurchases under the repurchase program.",supported
+q19-s3,False,"This global footprint exposes the company to risks from differing policies and regulations, geopolitical conditions, trade restrictions, tariffs and supply-chain disruptions across the regions where it operates and does business.","[c0035] We have product development, engineering, manufacturing, sales and other operations distributed throughout many countries, and some of our business activities are concentrated in certain geographic areas. In fiscal 2025, approximately 89% of our net revenue was to customers in regions outside the United States. As a result of the global nature of our operations, we are subject to a number of factors that could have an adverse impact on our business, financial condition and results of operations. These factors include global political and social conditions, such as policies or regulations within countries, including in China, the United States and countries in Europe and Asia, that favor domestic companies over non-domestic companies, including efforts to promote the development and growth of local competitors to us, or regarding national, commercial or security issues. Other factors include geopolitical turmoil, acts of war or social unrest; our ability to maintain appropriate business processes, procedures and internal controls in our geographically diverse operations; delays or restrictions
+
+on personnel travel and in shipping materials or products; our ability to develop relationships with local customers, suppliers and governments; performance of our geographically diverse third-party providers; impacts of regional or global health epidemics, natural disasters and extreme and chronic weather events; fluctuations in interest rates and currency exchange rates; as well as other factors discussed in this Risk Factors section. Any of these factors may have an adverse impact on our business and manufacturing operations or demand for our products and services, and our performance and results of operations may be adversely affected.
+
+***Global trade issues and changes in and uncertainties with respect to trade policies and export regulations, including import and export license requirements, trade sanctions, tariffs and international trade disputes, have adversely impacted and could further adversely impact our business and operations, and reduce the competitiveness of our products and services relative to local and global competitors.*** || [c0036] A majority of our products and services are delivered to customers in jurisdictions outside of the United States, including China, Taiwan and Korea. We also purchase a significant portion of equipment and supplies from suppliers outside of the United States. There is inherent risk, based on the complex relationships among the United States and the countries in which we conduct our business, that political, diplomatic and national security factors can lead to global trade restrictions and changes in trade policies and export regulations that affect the semiconductor industry. The United States and other countries have imposed and may continue to impose new trade restrictions and export regulations, have levied tariffs and taxes on certain goods and could significantly increase or impose new tariffs on a broad array of goods. Trade restrictions and export regulations, or increased or new tariffs and additional taxes, including any retaliatory measures, can negatively impact end-user demand and customer investment in semiconductor equipment, increase our supply chain complexity and our manufacturing costs, decrease margins, reduce the competitiveness of our products, or restrict our ability to sell products, provide services or purchase necessary equipment and supplies, any or all of which could have a material and adverse effect on our business, results of operations, or financial condition. || [c0041] A significant number of our customers and suppliers are located outside of the United States. Increases in tariffs increase our costs and can negatively impact our margins and reduce the competitiveness of our products due to the increase in the cost of importing materials, parts and components used in manufacturing our products. Tariffs can also increase supply chain complexity and may make it more difficult to purchase necessary equipment and supplies to manufacture our products. Increases in tariffs, including reciprocal and sector-based tariffs, also increase the cost to our customers of importing our products, which could harm customer demand for our products. Uncertainty or volatility with respect to tariffs and trade disputes may also make it difficult for us and our customers and suppliers to make and execute business and capital equipment investment plans; lead to global or regional inflation and economic recession and reduce demand for semiconductor chips and electronic devices; cause our customers to delay or cancel orders or negatively impact our competitive position; impede our ability to purchase materials, including critical materials and minerals, and disrupt supply chain and logistics. For example, in 2025 the Chinese government implemented export controls on the export of rare earth minerals that are used in certain of our products and may implement additional controls in the future. We may take actions to mitigate the impact of increases in tariffs and changes in trade policies, but there can be no assurance that we will be successful, and any such actions could result in additional costs, manufacturing delays or other difficulties, as well as additional risks, and may not be effective. Any or all of these factors may have a material and adverse impact on our business, financial condition and results of operations.
+
+***We are exposed to risks associated with a highly concentrated customer base.***",supported
+q15-s1,False,"AGS net revenue increased in fiscal 2025 primarily because of higher customer spending on long-term service agreements and spares, partially offset by lower customer spending on 200mm equipment.","[c0096] Net revenue in fiscal 2025 increased as compared to the prior year. Gross margin increased primarily driven by higher net revenue, favorable changes in customer and product mix, an increase in average selling prices, and lower material and manufacturing costs.
+
+Semiconductor Systems net revenue increased in fiscal 2025 as compared to the prior year as customers continued to make strategic investments in new capacity and new technology transitions. Foundry and logic customers’ spending in fiscal 2025 increased driven primarily by higher customer investments in leading-edge manufacturing technologies. Memory customers’ spending in fiscal 2025 was higher due to increased customer investments in NAND fabrication equipment upgrades. Investments by semiconductor equipment customers are expected to remain strong with growth in the adoption of high-bandwidth memory and other forms of advanced packaging, continued demand for AI and data center computing, and for non-leading edge nodes. The Semiconductor Systems segment continued to represent the largest contributor of net revenue.
+
+Our AGS net revenue in fiscal 2025 increased compared to the prior year primarily due to higher customer spending on long-term service agreements and spares, partially offset by lower customer spending on 200mm equipment. Demand for services is expected to grow as our installed base of systems and chambers increases and customers renew long-term service agreements.
+
+Over the longer term, we believe secular drivers such as data center AI, edge AI and the internet of things, robotics and electric and autonomous vehicles will continue to create the next wave of growth for semiconductors and expand our served market opportunities. We believe device refresh cycles, such as those for PCs and smartphones, will also contribute to the next wave of growth.",supported
+q24-s1,False,The goodwill impairment recognized in FY2025 was $41 million.,"[c0172] Goodwill is not amortized but is reviewed for impairment annually during the fourth quarter of each fiscal year and whenever events or changes in circumstances indicate that the carrying value of an asset may not be recoverable. The process of evaluating the potential impairment of goodwill requires judgment.
+
+When reviewing goodwill for impairment, we first perform a qualitative assessment to determine whether it is more likely than not that the fair value of a reporting unit is less than its carrying value. In performing a qualitative assessment, we consider business conditions and other factors including, but not limited to (i) adverse industry or economic trends, (ii) restructuring actions and lower projections that may impact future operating results, (iii) sustained decline in share price, and (iv) overall financial performance and other events affecting the reporting units. If we conclude that it is more likely than not that the fair value of a reporting unit is less than its carrying amount, then a quantitative impairment test is performed by estimating the fair value of the reporting unit and comparing it to its carrying value. If the carrying value of a reporting unit exceeds its fair value, we would record an impairment charge equal to the excess of the carrying value of the reporting unit over its fair value.
+
+In the fourth quarter of fiscal 2025, we performed a qualitative assessment to test goodwill for all of our reporting units for impairment. Based on this assessment, we determined that a quantitative impairment test was required for certain non-strategic businesses within our Corporate and Other category, primarily due to events related to the exit of one such business during the quarter. As a result, we recognized goodwill impairment charges of $41 million in general and administrative expenses in our Consolidated Statements of Operations. No goodwill impairment was recorded during fiscal 2024 and 2023.",supported
+q18-s1,False,"The report says a valuation allowance reflects the estimated amount of net deferred tax assets that may not be realized, and that the company had $407 million of corporate alternative minimum tax credit carryforwards at October 26, 2025.","[c0267] $ 530
+
+$ 569
+
+$ 460
+
+$ 530
+
+A valuation allowance is recorded to reflect the estimated amount of net deferred tax assets that may not be realized. Changes in the valuation allowance in each fiscal year were as follows:
+
+At October 26, 2025, we have corporate alternative minimum tax credit carryforwards of $407 million that are carried over until exhausted. We also have state research and development tax credit carryforwards of $677 million, including $624 million of credits that are carried over until exhausted and $42 million that are carried over for 15 years and begin to expire in fiscal 2034. It is more likely than not that all tax credit carryforwards, net of valuation allowance, will be utilized.",supported
+q09-s1,False,"Foundry, logic and other declined from 68 % of Semiconductor Systems revenue in 2024 to 67 % in 2025, DRAM declined from 28 % to 26 %, and NAND increased from 4 % to 7 %.","[c0095] Net revenue for Semiconductor Systems by market for the periods presented were as follows:
+|  | 2025 | 2024 |
+| --- | --- | --- |
+| Foundry, logic and other | 67 % | 68 % |
+| Dynamic random-access memory (DRAM) | 26 % | 28 % |
+| Flash memory (NAND) | 7 % | 4 % |
+|  | 100 % | 100 % |",supported
+q32-s1,False,The context does not state how Semiconductor Systems’ or AGS’s gross margins moved; it reports that Semiconductor Systems’ operating margin increased and AGS’ operating margin decreased in fiscal 2025 compared with the prior year.,"[c0106] Semiconductor Systems’ operating margin for fiscal 2025 increased compared to the same period in the prior year primarily driven by higher net revenue, favorable changes in customer and product mix, lower material and manufacturing costs, and an increase in average selling prices, partially offset by increased RD&E expenses.
+
+AGS’ operating margin for fiscal 2025 decreased compared to the same periods in the prior year primarily due to a decrease in 200mm equipment net revenue, higher expense related to an increase in headcount to support business growth, and higher excess and obsolete inventory charges, partially offset by higher net revenue from services and spares.",supported
+q07-s1,False,FY2025 restructuring charges totaled $181 million.,"[c0231] Restructuring charges related to the Fiscal 2025 Restructuring Plan were as follows:
+|  | 2025 |
+| --- | --- |
+|  | (In millions) |
+| Severance and other employee-related charges | $ 154 |
+| Asset impairments | 27 |
+| Total | $ 181 |",supported
+q07-s2,False,Approximately 4% of the global workforce is expected to be impacted.,"[c0230] *Fiscal 2025 Restructuring Plan*
+
+In the fourth quarter of fiscal 2025, we approved a workforce reduction plan (Fiscal 2025 Restructuring Plan) to position us for continued growth as a more competitive and productive organization and expect approximately 4% of our global workforce to be impacted under this plan. The majority of the charges related to the Fiscal 2025 Restructuring Plan were recognized in the fourth quarter of fiscal 2025 and consist primarily of severance and other employment termination benefits to be paid in cash, and other non-cash related charges.",supported
+q04-s1,False,"Interest and other income (expense), net increased primarily because of higher net gains on equity investments, partly offset by lower interest income due to lower cash balances and lower market interest rates.","[c0102] Interest expense incurred was primarily associated with senior unsecured notes. Interest expense in fiscal 2025 increased slightly as a result of the issuance of senior unsecured notes in June 2024.
+
+Interest and other income (expense), net in fiscal 2025 increased primarily driven by higher net gain on equity investments, partially offset by lower interest income driven by lower cash balances and a decrease in market interest rates.",supported
+q40-s1,True,"The Singapore remeasurement and CAMT valuation allowance together accounted for $1,066 million of the FY2025 tax provision increase ($659 million + $407 million).","[c0104] Our provision for income taxes and effective tax rate are affected by the geographical composition of pre-tax income which includes jurisdictions with differing tax rates, conditional reduced tax rates and other income tax incentives. It is also affected by events that vary from period to period, such as changes in income tax laws and the resolution of prior years’ income tax filings.
+
+Our effective tax rate for fiscal 2025 was higher than the prior fiscal year primarily due to a $659 million remeasurement of deferred tax assets resulting from new tax incentive agreements in Singapore and the recognition of a $407 million valuation allowance against deferred tax assets related to corporate alternative minimum tax (CAMT) credits. These credits are not expected to be realized as a result of changes in the timing of future tax deductions, following the enactment of the One Big Beautiful Bill Act. No prudent and feasible tax-planning strategies are currently available. The amount of the valuation allowance may be adjusted in future quarters if estimates of future taxable income change.",partially_supported
+q03-s2,True,"The smaller denominator more than offset the lower net income, so diluted EPS rose from $ 8.61 to $ 8.66.","[c0188] | Fiscal Year | 2025 | 2024 | 2023 |
+| --- | --- | --- | --- |
+|  | (In millions, except per share amounts) |  |  |
+| Numerator: |  |  |  |
+| Net income | $ 6,998 | $ 7,177 | $ 6,856 |
+| Denominator: |  |  |  |
+| Weighted average common shares outstanding | 804 | 827 | 840 |
+| Effect of weighted dilutive restricted stock units and employees’ stock purchase plan shares | 4 | 7 | 5 |
+| Denominator for diluted earnings per share | 808 | 834 | 845 |
+| Basic earnings per share | $ 8.71 | $ 8.68 | $ 8.16 |
+| Diluted earnings per share | $ 8.66 | $ 8.61 | $ 8.11 |
+| Potentially weighted dilutive securities | — | — | — |",supported
+q30-s1,True,"In FY2025, revenue grew 25 % in Korea compared with 6 % in Japan, so Korea’s growth rate was 19 percentage points higher.","[c0097] Net revenue by geographic region, determined by the location of customers’ facilities to which products were shipped and services were performed, was as follows:
+|  | 2025 |  | 2024 |  | Change 2025 over 2024 |
+| --- | --- | --- | --- | --- | --- |
+|  | (In millions, except percentages) |  |  |  |  |
+| China | $ 8,529 | 30% | $ 10,117 | 37% | (16)% |
+| Korea | 5,608 | 20% | 4,493 | 17% | 25 % |
+| Taiwan | 6,857 | 24% | 4,010 | 15% | 71 % |
+| Japan | 2,273 | 8% | 2,154 | 8% | 6 % |
+| Southeast Asia | 1,076 | 4% | 1,141 | 4% | (6)% |
+| Asia Pacific | 24,343 | 86% | 21,915 | 81% | 11 % |
+| United States | 3,063 | 11% | 3,818 | 14% | (20)% |
+| Europe | 962 | 3% | 1,443 | 5% | (33)% |
+| Total | $ 28,368 | 100% | $ 27,176 | 100% | 4 % |",supported
+q31-s1,False,"United States revenue decreased from $ 3,818 million in 2024 to $ 3,063 million in 2025, a reported change of (20)%.","[c0097] Net revenue by geographic region, determined by the location of customers’ facilities to which products were shipped and services were performed, was as follows:
+|  | 2025 |  | 2024 |  | Change 2025 over 2024 |
+| --- | --- | --- | --- | --- | --- |
+|  | (In millions, except percentages) |  |  |  |  |
+| China | $ 8,529 | 30% | $ 10,117 | 37% | (16)% |
+| Korea | 5,608 | 20% | 4,493 | 17% | 25 % |
+| Taiwan | 6,857 | 24% | 4,010 | 15% | 71 % |
+| Japan | 2,273 | 8% | 2,154 | 8% | 6 % |
+| Southeast Asia | 1,076 | 4% | 1,141 | 4% | (6)% |
+| Asia Pacific | 24,343 | 86% | 21,915 | 81% | 11 % |
+| United States | 3,063 | 11% | 3,818 | 14% | (20)% |
+| Europe | 962 | 3% | 1,443 | 5% | (33)% |
+| Total | $ 28,368 | 100% | $ 27,176 | 100% | 4 % |",supported
+q31-s2,True,"Its share of total revenue declined from 14% to 11%, a decrease of 3 percentage points.","[c0097] Net revenue by geographic region, determined by the location of customers’ facilities to which products were shipped and services were performed, was as follows:
+|  | 2025 |  | 2024 |  | Change 2025 over 2024 |
+| --- | --- | --- | --- | --- | --- |
+|  | (In millions, except percentages) |  |  |  |  |
+| China | $ 8,529 | 30% | $ 10,117 | 37% | (16)% |
+| Korea | 5,608 | 20% | 4,493 | 17% | 25 % |
+| Taiwan | 6,857 | 24% | 4,010 | 15% | 71 % |
+| Japan | 2,273 | 8% | 2,154 | 8% | 6 % |
+| Southeast Asia | 1,076 | 4% | 1,141 | 4% | (6)% |
+| Asia Pacific | 24,343 | 86% | 21,915 | 81% | 11 % |
+| United States | 3,063 | 11% | 3,818 | 14% | (20)% |
+| Europe | 962 | 3% | 1,443 | 5% | (33)% |
+| Total | $ 28,368 | 100% | $ 27,176 | 100% | 4 % |",supported

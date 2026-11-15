@@ -3,6 +3,146 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+---
+
+## 018. CI runs lightweight checks only
+*2026-11-15 · Phase 5*
+
+**Decision**
+GitHub Actions runs on every PR and push to main:
+- `evals/validate.py evals/golden.jsonl` (structure only)
+- `pytest tests/` (chunking rules, golden-set tools)
+
+Not in CI: PDF quote checks (PDFs are not in the repo, 006), retrieval/answer/judge evals
+(need models, Milvus, API keys, and cost money). These stay manual and are logged in
+`evals/results*.md`.
+
+**Consequences**
+- `chunk.py` imports `sentence_transformers` lazily so tests do not pull in PyTorch.
+- Tests encode incidents we actually hit: glued JSONL lines, dangling section-label rows.
+
+---
+
+## 017. Parser and chunking compared on the 40-question set: keep LlamaParse + v2.2
+*2026-11-15 · Phase 5 · closes the open checks in 008 and 010*
+
+**Context**
+008 chose LlamaParse after a visual comparison of 4 pages; 010 adopted chunking v2 without
+measuring it against v1. Both were to be checked with recall.
+
+**Results** (body-only, k=5, bge-small, 36 answerable questions)
+
+| parser | chunking | page recall@5 | quote recall@5 |
+|---|---|---|---|
+| LlamaParse | v2.2 | 0.87 | **0.83** |
+| PyMuPDF | v2.2 | 0.88 | 0.74 |
+| LlamaParse | v1 | 0.78 | 0.67 |
+
+- Chunking mattered more than the parser: v1 → v2.2 +16 points; PyMuPDF → LlamaParse +9 points.
+- LlamaParse won mostly on tables (q06, q22, q27, q40) and where headings separate topics (q23).
+- PyMuPDF won q01's tax paragraph (rank 1 vs 20): without headings, cause and effect landed
+  in one chunk. v1 won single-sentence facts (q18, q23) that v2.2's larger chunks dilute.
+- Page recall ranked PyMuPDF first; quote recall did not. Page-level scoring is misleading.
+
+**Decision**
+Keep LlamaParse + chunking v2.2.
+
+**Consequences**
+- Golden quotes were validated on PyMuPDF text, which slightly favors PyMuPDF in matching;
+  LlamaParse's real advantage may be larger.
+- Next ideas: small-to-big retrieval (search small units, pass the parent chunk to the LLM),
+  and keeping a cause paragraph with the table it explains.
+- One document only; re-check when more documents are added (Phase 6).
+
+---
+
+## 016. Faithfulness judge: sentence-level LLM judge, validated by human labels and planted errors
+*2026-11-15 · Phase 5*
+
+**Context**
+Format and evidence metrics cannot tell whether a sentence actually matches the chunks it cites.
+
+**Decision**
+- An LLM judge labels each answer sentence as supported / partially_supported / unsupported,
+  seeing only the chunks that sentence cites. Inferred sentences pass only if the inference
+  or calculation follows from the sources.
+- Judge model is configurable (`JUDGE_MODEL`); currently the same as the answer model.
+- The judge is validated two ways before its scores are used:
+  1. agreement with 20 hand-labeled sentences
+  2. 12 planted errors (wrong number, cause, direction, entity, unit, swapped facts,
+     unsupported additions, wrong calculation, overclaim) plus 2 unchanged controls
+
+**Results**
+- Real answers (40 questions, 44 sentences): 95% supported, 5% partially supported, 0 unsupported.
+- Human agreement: 19/20. The one disagreement (q25) was judge inconsistency:
+  the same "end of FY2025 = October 26, 2025" wording was accepted in q20 and penalized in q25.
+- Planted errors: 12/12 caught, controls 2/2 kept, exact labels 14/14.
+
+**Consequences**
+- Faithfulness ≠ completeness: q18 was faithful but did not give the actual cause.
+- The judge cannot verify claims about the whole report ("the report does not state X");
+  answers must say "the retrieved sections do not state X".
+- The planted-error set is small, hand-written, and one error per sentence; self-preference
+  (same model generating and judging) is not tested. Re-run with a different `JUDGE_MODEL`.
+
+---
+
+## 015. Unanswerable questions accept `partial` answers
+*2026-11-14 · Phase 5*
+
+q38 ("how many shares will be repurchased in fiscal 2026?") returned `partial`:
+it stated that no share count is given and cited the $14.0B remaining authorization.
+This is more useful than "no evidence", so unanswerable questions now pass with
+`no_evidence` or `partial`, and fail only with `answered`.
+A `partial` answer could still contain an invented figure; the faithfulness check (5-3)
+must cover these answers.
+
+---
+
+## 014. Exclude exhibits from retrieval by default (supersedes part of 011)
+*2026-11-14 · Phase 5*
+
+**Context**
+011 kept the body-only filter off because it had no effect on 9 questions.
+On the 40-question set, q23 ("how many employees?") failed: three exhibit pages
+(the subsidiary list, p88–90) took top-5 slots and pushed the answer (p9) to rank 7.
+
+**Decision**
+Filter retrieval to `section == "body"` by default, in both evaluation and answer generation.
+
+**Results** (40 questions, 36 answerable)
+- quote recall@5 0.77 → 0.80, page recall@5 0.84 → 0.87. Only q23 changed (rank 7 → 4); no question got worse.
+
+**Consequences**
+- Exhibits (subsidiaries, auditor consent, certifications) are unreachable by default.
+  Questions that need them must be routed explicitly (Phase 7 router).
+- 9 questions were too few to see this effect; settings judged on small sets should be re-checked.
+
+---
+
+## 013. Golden evidence may list alternative locations
+*2026-11-12 · Phase 5*
+
+**Context**
+q03 was answered correctly from the EPS note (p60), but the golden set listed the diluted
+share counts only on p47, so evidence hit scored 0/2. Reporting which chunk actually matched
+revealed more repeats: the tax remeasurement sentence appears in MD&A (p32) and the income tax
+note (p77); the workforce reduction appears in MD&A (p31) and the restructuring note (p70).
+
+**Decision**
+- An evidence item may list `alternatives` (page + quote). Any one location counts as found.
+- `validate.py --pdf` checks every alternative quote against the PDF.
+- Retrieval output shows the page of the chunk that actually matched.
+
+**Results**
+- Without changing the system: retrieval quote recall@5 0.69 → 0.75, answer evidence hit 0.64 → 0.69.
+- Page recall is now computed per evidence item (was per unique page); earlier page recall
+  values are not comparable.
+- q03's buyback evidence still ranks 68+ even with a sentence-form alternative (p35):
+  the question never mentions buybacks (vocabulary gap, see 011).
+
+**Consequences**
+- New golden questions must check for repeated facts across MD&A, statements, and notes.
 
 ---
 
@@ -40,8 +180,10 @@ Users would wrongly conclude the report has no answer.
 
 ---
 
+
 ## 011. Retrieval baseline: plain dense search; "why" failures need decomposition, not tuning
 *2026-11-11 · Phase 3*
+**Status:** body-only part superseded by 014
 
 **Context**
 First golden-set run on `chunks_llamaparse_v2_2` (317 chunks, bge-small, FLAT/COSINE, k=5, 9 answerable questions).
@@ -76,6 +218,7 @@ First golden-set run on `chunks_llamaparse_v2_2` (317 chunks, bge-small, FLAT/CO
 
 ## 010. Chunking v2: merge across pages, split long tables, attach captions
 *2026-11-11 · Phase 3*
+**Status:** confirmed by 017 (v1 vs v2.2: quote recall 0.67 → 0.83)
 
 **Context**
 v1 (one block = one chunk, LlamaParse output) produced 881 chunks.
@@ -117,8 +260,10 @@ Embedding model: `BAAI/bge-small-en-v1.5` (384 dims, local, free).
 
 ---
 
+
 ## 008. LlamaParse as primary parser; PyMuPDF kept as baseline
 *2026-11-08 · Phase 2*
+**Status:** confirmed by 017 (40-question recall comparison)
 
 **Context**
 Pages 30, 32, 47, 80 of the Applied Materials FY2025 10-K were parsed with

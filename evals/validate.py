@@ -53,13 +53,20 @@ def validate_row(row: dict) -> list[str]:
     if row["type"] != "unanswerable" and not row["evidence"]:
         errors.append("evidence가 비어 있음")
 
-    # 4) evidence 하나하나가 page(양의 정수)와 quote(비어 있지 않은 문자열)를 갖는가
+    # 4) evidence 하나하나(와 그 alternatives)가 page(양의 정수)와 quote(비어 있지 않은 문자열)를 갖는가
     for i, ev in enumerate(row["evidence"]):
-        page = ev.get("page")
-        if not isinstance(page, int) or page < 1:
-            errors.append(f"evidence[{i}].page는 1 이상의 정수여야 함")
-        if not ev.get("quote"):
-            errors.append(f"evidence[{i}].quote가 비어 있음")
+        alternatives = ev.get("alternatives", [])
+        if not isinstance(alternatives, list):
+            errors.append(f"evidence[{i}].alternatives는 리스트여야 함")
+            alternatives = []
+        for label, option in [(f"evidence[{i}]", ev)] + [
+            (f"evidence[{i}].alternatives[{j}]", alt) for j, alt in enumerate(alternatives)
+        ]:
+            page = option.get("page")
+            if not isinstance(page, int) or page < 1:
+                errors.append(f"{label}.page는 1 이상의 정수여야 함")
+            if not option.get("quote"):
+                errors.append(f"{label}.quote가 비어 있음")
 
     # 5) numbers의 값은 모두 숫자여야 한다 (bool은 int의 하위 타입이라 따로 막는다)
     for key, value in row["numbers"].items():
@@ -84,7 +91,9 @@ def check_quotes(rows: list[dict], pdf_path: Path) -> list[str]:
 
     errors = []
     for row in rows:
-        for ev in row.get("evidence", []):
+        # 원래 근거와 대체 근거(alternatives)를 모두 확인한다
+        options = [opt for ev in row.get("evidence", []) for opt in [ev, *ev.get("alternatives", [])]]
+        for ev in options:
             page = ev.get("page")
             if not isinstance(page, int) or not 1 <= page <= len(pages):
                 errors.append(f"{row['id']}: page {page}는 PDF 범위(1~{len(pages)}) 밖")
@@ -103,7 +112,7 @@ def main() -> int:
     rows, errors, seen_ids = [], [], set()
 
     # jsonl은 "한 줄 = JSON 하나"이므로 줄 단위로 읽는다
-    with args.path.open(encoding="utf-8") as f:
+    with args.path.open(encoding="utf-8-sig") as f:  # BOM이 있어도 읽는다
         for line_no, line in enumerate(f, start=1):
             if not line.strip():
                 continue  # 빈 줄은 건너뛴다
@@ -133,6 +142,10 @@ def main() -> int:
 
     counts = {t: sum(r["type"] == t for r in rows) for t in sorted(VALID_TYPES)}
     print(f"OK: 질문 {len(rows)}개, 유형별 {counts}")
+    # 초안(source: claude-draft) 중 사람이 아직 검증하지 않은 것
+    unverified = [r["id"] for r in rows if r.get("verified") is False]
+    if unverified:
+        print(f"아직 검증 안 됨 {len(unverified)}개: {', '.join(unverified)}")
     return 0
 
 

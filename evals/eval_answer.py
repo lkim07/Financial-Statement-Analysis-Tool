@@ -50,7 +50,10 @@ def main(args) -> None:
 
         # 1) status: 답이 없는 질문은 no_evidence, 나머지는 answered 또는 partial이어야 한다
         expected_none = q["type"] == "unanswerable"
-        ok = (answer.status == "no_evidence") == expected_none
+        if expected_none:
+            ok = answer.status != "answered"      # 없다고 하거나, 관련 사실만 주고 없는 부분을 밝히면 통과
+        else:
+            ok = answer.status != "no_evidence"   # 답이 있는 질문은 최소한 일부라도 답해야 통과
         status_ok += ok
 
         # 2) 인용 형식
@@ -60,7 +63,11 @@ def main(args) -> None:
         cited = {cid for s in answer.sentences for cid in s.citations}
         cited_text = " ".join(norm(c["text"]) for c in chunks if c["chunk_id"] in cited)
         if q["evidence"]:
-            hits = sum(norm(ev["quote"]) in cited_text for ev in q["evidence"])
+            # 원래 인용문이나 alternatives 중 하나라도 인용한 청크 안에 있으면 성공
+            hits = sum(
+                any(norm(opt["quote"]) in cited_text for opt in [ev, *ev.get("alternatives", [])])
+                for ev in q["evidence"]
+            )
             hit_scores.append(hits / len(q["evidence"]))
             hit_str = f"{hits}/{len(q['evidence'])}"
         else:
