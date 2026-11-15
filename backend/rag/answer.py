@@ -49,7 +49,9 @@ Rules:
   set `status` to "partial", answer the supported part, and describe what is missing in `missing`.
   Never fill the gap with a plausible guess.
 - If the context contains nothing relevant, set `status` to "no_evidence" and return no sentences.
-- Be concise: at most 6 sentences."""
+- Be concise: at most 6 sentences.
+- Never claim the whole report lacks something. Say "the retrieved sections do not state ..." instead,
+  because you only see a few excerpts of the report."""
 
 
 # ---------- 2. 검색 ----------

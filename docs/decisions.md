@@ -5,6 +5,37 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 016. Faithfulness judge: sentence-level LLM judge, validated by human labels and planted errors
+*2026-11-15 · Phase 5*
+
+**Context**
+Format and evidence metrics cannot tell whether a sentence actually matches the chunks it cites.
+
+**Decision**
+- An LLM judge labels each answer sentence as supported / partially_supported / unsupported,
+  seeing only the chunks that sentence cites. Inferred sentences pass only if the inference
+  or calculation follows from the sources.
+- Judge model is configurable (`JUDGE_MODEL`); currently the same as the answer model.
+- The judge is validated two ways before its scores are used:
+  1. agreement with 20 hand-labeled sentences
+  2. 12 planted errors (wrong number, cause, direction, entity, unit, swapped facts,
+     unsupported additions, wrong calculation, overclaim) plus 2 unchanged controls
+
+**Results**
+- Real answers (40 questions, 44 sentences): 95% supported, 5% partially supported, 0 unsupported.
+- Human agreement: 19/20. The one disagreement (q25) was judge inconsistency:
+  the same "end of FY2025 = October 26, 2025" wording was accepted in q20 and penalized in q25.
+- Planted errors: 12/12 caught, controls 2/2 kept, exact labels 14/14.
+
+**Consequences**
+- Faithfulness ≠ completeness: q18 was faithful but did not give the actual cause.
+- The judge cannot verify claims about the whole report ("the report does not state X");
+  answers must say "the retrieved sections do not state X".
+- The planted-error set is small, hand-written, and one error per sentence; self-preference
+  (same model generating and judging) is not tested. Re-run with a different `JUDGE_MODEL`.
+
+---
+
 ## 015. Unanswerable questions accept `partial` answers
 *2026-11-14 · Phase 5*
 
