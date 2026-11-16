@@ -1,0 +1,28 @@
+[
+  {
+    "doc_id": "amat-10k-fy2025",
+    "company": "Applied Materials",
+    "ticker": "AMAT",
+    "doc_type": "10-K",
+    "fiscal_year": 2025,
+    "period_end": "2025-10-26",
+    "file": "amat_10k_fy2025.pdf",
+    "exhibit_start_page": 88,
+    "source_url": "https://ir.appliedmaterials.com/static-files/af687923-06c7-4b43-a7a5-45750717f3ca",
+    "filing_url": "https://www.sec.gov/Archives/edgar/data/6951/000162828025056742/amat-20251026.htm",
+    "sha256": "6B7AA245ED70C7E8D775F77616686C13E7A9C176D05CF32591EF6BA818E78078"
+  },
+  {
+    "doc_id": "amat-10k-fy2024",
+    "company": "Applied Materials",
+    "ticker": "AMAT",
+    "doc_type": "10-K",
+    "fiscal_year": 2024,
+    "period_end": "2024-10-27",
+    "file": "amat_10k_fy2024.pdf",
+    "exhibit_start_page": 89,
+    "source_url": "https://ir.appliedmaterials.com/static-files/3fe5f775-6637-4178-8ece-0934a6740020",
+    "filing_url": "https://www.sec.gov/Archives/edgar/data/6951/000000695124000044/amat-20241027.htm",
+    "sha256": "8909AFD7F0D66528E2B184929F7FE68B3A1A7385748757AC2BE7446FAEB9FC54"
+  }
+]
