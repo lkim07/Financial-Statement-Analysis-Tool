@@ -3,6 +3,7 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+
 ---
 
 ## 020. Adding a prior-year report hurts retrieval; metadata filters recover it

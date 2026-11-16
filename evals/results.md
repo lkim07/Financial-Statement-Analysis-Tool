@@ -17,3 +17,6 @@
 | 2026-11-15 | chunks_llamaparse_v2_2 | 5 | False | True | 0.87 | 0.83 | 35 | 40q body only + norm fix |
 | 2026-11-15 | chunks_pymupdf_v2_2 | 5 | False | True | 0.88 | 0.74 | 35 | pymupdf v2.2 |
 | 2026-11-15 | chunks_llamaparse_v1 | 5 | False | True | 0.78 | 0.67 | 35 | llamaparse v1 |
+| 2026-11-16 | docs_fy2025 | 5 | False | True | 0.87 | 0.83 | 35 | fy2025 only (refactor check) |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.76 | 0.73 | 35 | fy2025 + fy2024 |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.87 | 0.83 | 35 | both indexed, filtered to fy2025 [docs: amat-10k-fy2025] |
