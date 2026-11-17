@@ -19,8 +19,13 @@ import json
 import re
 from pathlib import Path
 
+import sys
+
 from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "rag"))
+from router import load_docs, route_docs  # noqa: E402
 
 DB_PATH = "data/milvus.db"
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
@@ -73,15 +78,17 @@ def evaluate(args) -> None:
     texts = [(BGE_PREFIX if args.prefix else "") + q["question"] for q in questions]
     vectors = model.encode(texts, normalize_embeddings=True)
 
+    registry = load_docs()
     page_scores, quote_scores, lines = [], [], []
     for q, vec in zip(questions, vectors):
+        docs = question_docs(q, args, registry)
         # 순위 진단을 위해 상위 k개가 아니라 전체를 순서대로 받아 온다
         hits = client.search(
             args.collection,
             data=[vec.tolist()],
             limit=total,
             output_fields=["page", "heading", "locations", "doc_id", "doc_label"],
-            filter=search_filter(args),
+            filter=search_filter(args, docs),
         )[0]
         top = hits[: args.k]
 
@@ -115,26 +122,44 @@ def evaluate(args) -> None:
         quote_scores.append(quote_recall)
 
         retrieved = ", ".join(f"{h['entity']['doc_label'][2:6]}:p{h['entity']['page']}" for h in top)
-        lines.append(f"{q['id']} [{q['type']}] page {page_recall:.2f} | quote {quote_recall:.2f} | top{args.k}: {retrieved}")
+        routed = ",".join(d[-4:] for d in docs) if docs else "all"
+        lines.append(f"{q['id']} [{q['type']}] docs {routed} | page {page_recall:.2f} | quote {quote_recall:.2f} | top{args.k}: {retrieved}")
         lines.extend(details)
 
     mean_page = sum(page_scores) / len(page_scores)
     mean_quote = sum(quote_scores) / len(quote_scores)
 
     print("\n".join(lines))
-    print(f"\n{args.collection}  k={args.k}  prefix={args.prefix}  body_only={args.body_only}  docs={args.doc or 'all'}  n={len(questions)}")
+    print(f"\n{args.collection}  k={args.k}  body_only={args.body_only}  docs={args.doc or 'per route'}  route={args.route}  n={len(questions)}")
     print(f"page recall@{args.k}:  {mean_page:.2f}")
     print(f"quote recall@{args.k}: {mean_quote:.2f}")
 
     append_result(args, mean_page, mean_quote, len(questions))
 
 
-def search_filter(args) -> str:
+def question_docs(q: dict, args, registry: list[dict]) -> list[str] | None:
+    """이 질문을 어느 문서에서 찾을지.
+
+    --doc   : 모든 질문에 같은 문서 (고정 필터)
+    --route none   : 필터 없음 (모든 문서)
+    --route oracle : 정답 근거가 있는 문서 (라우터가 완벽할 때의 상한선)
+    --route rule   : 질문 텍스트만 보고 규칙으로 고름 (router.py)
+    """
+    if args.doc:
+        return args.doc
+    if args.route == "oracle":
+        return sorted({doc_of(o) for ev in q["evidence"] for o in [ev, *ev.get("alternatives", [])]})
+    if args.route == "rule":
+        return route_docs(q["question"], registry)
+    return None
+
+
+def search_filter(args, docs: list[str] | None) -> str:
     parts = []
     if args.body_only:
         parts.append('section == "body"')
-    if args.doc:
-        parts.append("doc_id in [" + ", ".join(f'"{d}"' for d in args.doc) + "]")
+    if docs:
+        parts.append("doc_id in [" + ", ".join(f'"{d}"' for d in docs) + "]")
     return " and ".join(parts)
 
 
@@ -149,7 +174,7 @@ def append_result(args, mean_page: float, mean_quote: float, n: int) -> None:
         )
     row = (
         f"| {datetime.date.today()} | {args.collection} | {args.k} | {args.prefix} | {args.body_only} "
-        f"| {mean_page:.2f} | {mean_quote:.2f} | {n} | {args.note}{' [docs: ' + ', '.join(args.doc) + ']' if args.doc else ''} |\n"
+        f"| {mean_page:.2f} | {mean_quote:.2f} | {n} | {args.note}{' [docs: ' + ', '.join(args.doc) + ']' if args.doc else ' [route: ' + args.route + ']'} |\n"
     )
     with open(RESULTS, "a", encoding="utf-8") as f:
         f.write(row)
@@ -162,6 +187,8 @@ if __name__ == "__main__":
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--prefix", action="store_true", help="prepend the bge query instruction")
     parser.add_argument("--body-only", action="store_true", help="exclude exhibits")
-    parser.add_argument("--doc", action="append", help="search only these doc_ids (repeatable)")
+    parser.add_argument("--doc", action="append", help="search only these doc_ids for every question (repeatable)")
+    parser.add_argument("--route", default="none", choices=["none", "oracle", "rule"],
+                        help="pick documents per question (ignored when --doc is given)")
     parser.add_argument("--note", default="")
     evaluate(parser.parse_args())

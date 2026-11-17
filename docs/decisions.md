@@ -3,6 +3,39 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+---
+
+## 021 Rule-based document router (year → report Y and Y+1, no year → latest)
+
+Date: 2026-11-16
+Status: accepted
+
+Context: With two 10-Ks in one collection, an unfiltered search drops quote recall
+(near-duplicate distractors, see 020), but a fixed FY2025 filter cannot answer FY2024 questions.
+
+Decision: Pick documents per question with backend/rag/router.py:
+- An explicitly named report ("FY2024 10-K") → that report.
+- A fiscal year Y → reports Y and Y+1 (the next 10-K repeats Y as a comparative year, possibly recast).
+- No year → the latest report only.
+- A year with no matching report → all reports.
+
+Results (50q golden, 45 scored, docs_v2_2, body-only, k=5):
+| route  | page | quote |
+| none   | 0.79 | 0.69  |
+| oracle | 0.88 | 0.77  |
+| rule   | 0.86 | 0.76  |
+
+Consequences:
+- The rule router is within 0.01 of the oracle ceiling; the remaining gap is ranking, not routing.
+- Only loss vs oracle: q33 ("fiscal 2024" opened the FY2024 report; its p39 crowded out FY2025 p35).
+  To check: does the FY2024 report repeat that sentence? If so, add it as an alternative.
+- q41 fails even with oracle routing. Two of its facts also appear in the FY2024 segment note
+  (p82, one table chunk holding both rows); added as alternatives, the best rank moved 17 → 7,
+  still outside k=5. Page recall credited p82 via a different chunk on the same page, a reminder
+  that page-level hits can overstate retrieval (quote recall stays the primary metric).
+  Remaining fix is multi-fact retrieval → Phase 7 query decomposition.
+- Lesson: before blaming retrieval for a 0, check the golden set for the same fact elsewhere.
+- Opening more documents costs top-k slots, not LLM tokens.
 
 ---
 

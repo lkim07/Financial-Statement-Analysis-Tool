@@ -20,3 +20,8 @@
 | 2026-11-16 | docs_fy2025 | 5 | False | True | 0.87 | 0.83 | 35 | fy2025 only (refactor check) |
 | 2026-11-16 | docs_v2_2 | 5 | False | True | 0.76 | 0.73 | 35 | fy2025 + fy2024 |
 | 2026-11-16 | docs_v2_2 | 5 | False | True | 0.87 | 0.83 | 35 | both indexed, filtered to fy2025 [docs: amat-10k-fy2025] |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.79 | 0.69 | 45 | 50q no routing [route: none] |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.88 | 0.77 | 45 | 50q oracle routing [route: oracle] |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.86 | 0.76 | 45 | 50q rule router [route: rule] |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.86 | 0.76 | 45 | 50q rule router, q41 alternatives [route: rule] |
+| 2026-11-16 | docs_v2_2 | 5 | False | True | 0.86 | 0.76 | 45 | 50q rule router, q41 alternatives [route: rule] |
