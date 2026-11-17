@@ -2,10 +2,11 @@
 
 사용법:
     python evals/validate.py evals/golden.jsonl
-    python evals/validate.py evals/golden.jsonl --pdf data/amat_10k_fy2025.pdf
+    python evals/validate.py evals/golden.jsonl --check-quotes
 
 1단계(항상): 각 줄이 JSON인지, 필수 필드와 타입이 맞는지 검사한다.
-2단계(--pdf를 주면): evidence의 quote가 정말 그 page에 있는지 PDF에서 확인한다.
+2단계(--check-quotes): evidence의 quote가 그 문서(doc)의 그 page에 정말 있는지 PDF에서 확인한다.
+                       문서 파일 위치는 data/sources.json에서 찾는다.
 """
 
 import argparse
@@ -15,6 +16,8 @@ import sys
 from pathlib import Path
 
 # 질문 유형은 이 네 가지만 허용한다. 라우터를 평가할 때 정답 라벨로 쓸 값이다.
+DEFAULT_DOC = "amat-10k-fy2025"  # doc이 없는 근거는 FY2025 10-K의 것이다
+
 VALID_TYPES = {"why", "numeric", "compare", "unanswerable"}
 
 # 필드 이름 -> 기대하는 파이썬 타입
@@ -65,6 +68,8 @@ def validate_row(row: dict) -> list[str]:
             page = option.get("page")
             if not isinstance(page, int) or page < 1:
                 errors.append(f"{label}.page는 1 이상의 정수여야 함")
+            if "doc" in option and not isinstance(option["doc"], str):
+                errors.append(f"{label}.doc은 문자열(doc_id)이어야 함")
             if not option.get("quote"):
                 errors.append(f"{label}.quote가 비어 있음")
 
@@ -81,32 +86,46 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def check_quotes(rows: list[dict], pdf_path: Path) -> list[str]:
-    """evidence의 quote가 적힌 page에 실제로 있는지 PDF를 열어 확인한다."""
-    import pymupdf  # --pdf를 쓸 때만 필요하므로 여기서 import한다
+def check_quotes(rows: list[dict]) -> list[str]:
+    """evidence의 quote가 그 문서의 그 page에 실제로 있는지 PDF를 열어 확인한다.
 
-    doc = pymupdf.open(pdf_path)
-    # 페이지 텍스트를 한 번만 뽑아 둔다. page는 1부터, 리스트 인덱스는 0부터 시작한다.
-    pages = [normalize(page.get_text()) for page in doc]
+    문서는 evidence의 doc(없으면 FY2025 10-K)으로 정하고, 파일 위치는 data/sources.json에서 찾는다.
+    """
+    import pymupdf  # --check-quotes를 쓸 때만 필요하므로 여기서 import한다
+
+    sources = {d["doc_id"]: d for d in json.loads(Path("data/sources.json").read_text(encoding="utf-8-sig"))}
+    pages_by_doc = {}  # 문서마다 페이지 텍스트를 한 번만 뽑아 둔다
+
+    def pages_of(doc_id: str) -> list[str] | None:
+        if doc_id not in pages_by_doc:
+            if doc_id not in sources:
+                return None
+            pdf = pymupdf.open(Path("data") / sources[doc_id]["file"])
+            pages_by_doc[doc_id] = [normalize(page.get_text()) for page in pdf]
+        return pages_by_doc[doc_id]
 
     errors = []
     for row in rows:
-        # 원래 근거와 대체 근거(alternatives)를 모두 확인한다
         options = [opt for ev in row.get("evidence", []) for opt in [ev, *ev.get("alternatives", [])]]
         for ev in options:
+            doc_id = ev.get("doc", DEFAULT_DOC)
+            pages = pages_of(doc_id)
+            if pages is None:
+                errors.append(f"{row['id']}: 등록되지 않은 문서 '{doc_id}'")
+                continue
             page = ev.get("page")
             if not isinstance(page, int) or not 1 <= page <= len(pages):
-                errors.append(f"{row['id']}: page {page}는 PDF 범위(1~{len(pages)}) 밖")
+                errors.append(f"{row['id']}: {doc_id} p{page}는 PDF 범위(1~{len(pages)}) 밖")
                 continue
             if normalize(ev["quote"]) not in pages[page - 1]:
-                errors.append(f"{row['id']}: p{page}에서 quote를 찾지 못함 -> {ev['quote']!r}")
+                errors.append(f"{row['id']}: {doc_id} p{page}에서 quote를 찾지 못함 -> {ev['quote']!r}")
     return errors
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="golden.jsonl 검증")
     parser.add_argument("path", type=Path)
-    parser.add_argument("--pdf", type=Path, help="quote를 대조할 원본 PDF")
+    parser.add_argument("--check-quotes", action="store_true", help="quote를 원본 PDF와 대조 (data/sources.json 사용)")
     args = parser.parse_args()
 
     rows, errors, seen_ids = [], [], set()
@@ -131,8 +150,8 @@ def main() -> int:
             seen_ids.add(row.get("id"))
             rows.append(row)
 
-    if args.pdf:
-        errors += check_quotes(rows, args.pdf)
+    if args.check_quotes:
+        errors += check_quotes(rows)
 
     if errors:
         print(f"문제 {len(errors)}개 발견:")

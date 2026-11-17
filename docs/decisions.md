@@ -5,6 +5,87 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 021 Rule-based document router (year → report Y and Y+1, no year → latest)
+
+Date: 2026-11-16
+Status: accepted
+
+Context: With two 10-Ks in one collection, an unfiltered search drops quote recall
+(near-duplicate distractors, see 020), but a fixed FY2025 filter cannot answer FY2024 questions.
+
+Decision: Pick documents per question with backend/rag/router.py:
+- An explicitly named report ("FY2024 10-K") → that report.
+- A fiscal year Y → reports Y and Y+1 (the next 10-K repeats Y as a comparative year, possibly recast).
+- No year → the latest report only.
+- A year with no matching report → all reports.
+
+Results (50q golden, 45 scored, docs_v2_2, body-only, k=5):
+| route  | page | quote |
+| none   | 0.79 | 0.69  |
+| oracle | 0.88 | 0.77  |
+| rule   | 0.86 | 0.76  |
+
+Consequences:
+- The rule router is within 0.01 of the oracle ceiling; the remaining gap is ranking, not routing.
+- Only loss vs oracle: q33 ("fiscal 2024" opened the FY2024 report; its p39 crowded out FY2025 p35).
+  To check: does the FY2024 report repeat that sentence? If so, add it as an alternative.
+- q41 fails even with oracle routing. Two of its facts also appear in the FY2024 segment note
+  (p82, one table chunk holding both rows); added as alternatives, the best rank moved 17 → 7,
+  still outside k=5. Page recall credited p82 via a different chunk on the same page, a reminder
+  that page-level hits can overstate retrieval (quote recall stays the primary metric).
+  Remaining fix is multi-fact retrieval → Phase 7 query decomposition.
+- Lesson: before blaming retrieval for a 0, check the golden set for the same fact elsewhere.
+- Opening more documents costs top-k slots, not LLM tokens.
+
+---
+
+## 020. Adding a prior-year report hurts retrieval; metadata filters recover it
+*2026-11-16 · Phase 6*
+
+**Results** (40 questions, all about FY2025; body-only, k=5)
+
+| setting | page recall@5 | quote recall@5 |
+|---|---|---|
+| FY2025 only (refactor check: identical to before 019) | 0.87 | 0.83 |
+| FY2025 + FY2024, no filter | 0.76 | 0.73 |
+| FY2025 + FY2024, filtered to FY2025 | 0.87 | 0.83 |
+
+- The FY2024 10-K shares template and wording with the FY2025 10-K; its MD&A paragraphs
+  took top-5 slots (q01, q27, q29, q33, q40 lost ranks). Near-duplicate documents from the
+  same company are worse distractors than unrelated documents.
+- A `doc_id` filter restores the single-document score exactly.
+
+**Consequences**
+- Choosing the document is required before retrieval. Users will not pick filters,
+  so the router (Phase 7) must infer the target year/document from the question.
+- 0.83 is the ceiling if the router always picks correctly; 0.73 is the floor with no routing.
+
+---
+
+## 019. Multiple documents: registry, document-prefixed IDs, one collection with metadata
+*2026-11-16 · Phase 6*
+
+**Context**
+Code assumed one document: hard-coded name and exhibit page, paths without a document,
+chunk IDs and citations by page only. The FY2024 10-K differs in structure
+(102 pages; exhibits start at p89 with an insider trading policy absent from FY2025).
+
+**Decision**
+- `data/sources.json` is the document registry; `registry.py` derives labels and paths from it.
+- Paths: `data/parsed/<doc_id>/<parser>/`, `data/chunks/<doc_id>/<parser>.jsonl`.
+- Chunk IDs are prefixed with the document (`amat-10k-fy2025:c0123`); chunks carry
+  `doc_id`, `doc_label`, `doc_type`, `fiscal_year`.
+- One Milvus collection for all documents; documents are selected by metadata filter,
+  not by separate collections.
+- Citations show document and page (`FY2025 10-K p32`). Golden evidence carries `doc`;
+  a quote counts only when found in a chunk of the same document.
+
+**Consequences**
+- The same year appears in several reports, sometimes recast (FY2024 Corporate and Other:
+  $155M in the FY2024 10-K, $1,040M in the FY2025 10-K). Answers must name the source document.
+
+---
+
 ## 018. CI runs lightweight checks only
 *2026-11-15 · Phase 5*
 

@@ -1,8 +1,8 @@
 """Parsed pages -> chunks (v2.1: merge short blocks, split long ones, attach table captions).
 
-Usage: uv run --project backend python backend/ingest/chunk.py [--parser llamaparse|pymupdf] [--strategy v2|v1]
-Reads:  data/parsed/<parser>/page_*.json
-Writes: data/chunks/<parser>.jsonl  (v1: data/chunks/<parser>_v1.jsonl)
+Usage: uv run --project backend python backend/ingest/chunk.py --doc amat-10k-fy2025 [--parser llamaparse|pymupdf] [--strategy v2|v1]
+Reads:  data/parsed/<doc_id>/<parser>/page_*.json
+Writes: data/chunks/<doc_id>/<parser>.jsonl  (v1: <parser>_v1.jsonl)
 
 Rules (see docs/decisions.md 010):
 - Heading blocks are not chunks. They become each chunk's `heading` and context header.
@@ -21,9 +21,10 @@ import re
 import statistics
 from pathlib import Path
 
+from registry import chunks_path, doc_label, doc_title, get_doc, parsed_dir
 
-DOC_NAME = "Applied Materials FY2025 10-K"
-EXHIBIT_START_PAGE = 88  # p88부터는 첨부 서류(Exhibit)
+
+# 문서마다 다른 값(이름, 첨부 서류 시작 페이지)은 data/sources.json에서 온다 (decision 019)
 MODEL_MAX_TOKENS = 512  # bge-small이 한 번에 읽는 최대 길이
 EMBED_LIMIT = 500  # embed_text(머리글 포함) 한도. 모델이 붙이는 특수 토큰 자리를 남긴다
 MERGE_TARGET = 400  # 짧은 블록을 합칠 때 본문(text)의 목표 크기
@@ -39,8 +40,12 @@ class Chunker:
     합치는 중인 블록들을 buffer에 모아 두었다가, 더 못 넣게 되면 flush()로 청크 하나를 만든다.
     """
 
-    def __init__(self, count_tokens):
+    def __init__(self, count_tokens, doc: dict):
         self.count = count_tokens  # 문자열 -> 토큰 수 함수
+        self.doc = doc
+        self.title = doc_title(doc)  # 'Applied Materials FY2025 10-K'
+        # 첨부 서류가 없는 문서도 있다 (null이면 전부 본문)
+        self.exhibit_start = doc.get("exhibit_start_page") or 10**6
         self.chunks = []
         self.heading = None
         self.section = "body"
@@ -50,7 +55,7 @@ class Chunker:
 
     def context(self, page: int) -> str:
         """맥락 머리글. 청크가 문서의 어디에서 왔는지 임베딩 모델에게 알려 준다."""
-        return f"{DOC_NAME} | p{page} | {self.heading or ''}"
+        return f"{self.title} | p{page} | {self.heading or ''}"
 
     def body_limit(self, page: int) -> int:
         """본문에 쓸 수 있는 토큰 수 = 전체 한도 - 머리글 길이 - 줄바꿈 여유."""
@@ -60,9 +65,14 @@ class Chunker:
         """청크 하나를 만든다. parts는 이 청크를 이루는 원본 블록들(위치 정보용)."""
         first_page = parts[0]["page"]
         self.chunks.append({
-            "chunk_id": f"c{len(self.chunks):04d}",
+            # 문서 ID를 앞에 붙여서 여러 문서의 청크 ID가 겹치지 않게 한다
+            "chunk_id": f"{self.doc['doc_id']}:c{len(self.chunks):04d}",
+            "doc_id": self.doc["doc_id"],
+            "doc_label": doc_label(self.doc),
+            "doc_type": self.doc["doc_type"],
+            "fiscal_year": self.doc["fiscal_year"],
             "page": first_page,
-            "section": "exhibit" if first_page >= EXHIBIT_START_PAGE else "body",
+            "section": "exhibit" if first_page >= self.exhibit_start else "body",
             "heading": self.heading,
             "type": chunk_type,
             # 페이지를 넘어 합칠 수 있으므로 위치는 (페이지, bbox) 목록이다. 하이라이트에 쓴다
@@ -136,7 +146,7 @@ class Chunker:
         block_type = block["type"]
 
         # 본문 -> 첨부 서류로 넘어가면 앞 내용과 합치지 않고, 본문의 제목도 이어받지 않는다
-        section = "exhibit" if page >= EXHIBIT_START_PAGE else "body"
+        section = "exhibit" if page >= self.exhibit_start else "body"
         if section != self.section:
             self.flush()
             self.heading = None
@@ -248,8 +258,8 @@ def split_table(md: str, limit: int, count) -> list[str]:
     return pieces
 
 
-def make_chunks(pages: list[dict], count_tokens) -> list[dict]:
-    chunker = Chunker(count_tokens)
+def make_chunks(pages: list[dict], count_tokens, doc: dict) -> list[dict]:
+    chunker = Chunker(count_tokens, doc)
     for page in pages:
         for block in page["blocks"]:
             chunker.add(block, page["page"])
@@ -257,20 +267,25 @@ def make_chunks(pages: list[dict], count_tokens) -> list[dict]:
     return chunker.chunks
 
 
-def make_chunks_v1(pages: list[dict]) -> list[dict]:
+def make_chunks_v1(pages: list[dict], doc: dict) -> list[dict]:
     """v1 (decision 010 이전): 블록 하나 = 청크 하나. 제목 블록도 청크가 되고, 긴 블록도 자르지 않는다.
 
     청킹 전략을 비교하려고 남겨 둔다. 실제 파이프라인에서는 쓰지 않는다.
     """
     chunks, heading = [], None
+    exhibit_start = doc.get("exhibit_start_page") or 10**6
     for page in pages:
-        section = "exhibit" if page["page"] >= EXHIBIT_START_PAGE else "body"
+        section = "exhibit" if page["page"] >= exhibit_start else "body"
         for block in page["blocks"]:
             if block.get("type") == "heading":
                 heading = clean_heading(block["text"])
-            context = f"{DOC_NAME} | p{page['page']} | {heading or ''}"
+            context = f"{doc_title(doc)} | p{page['page']} | {heading or ''}"
             chunks.append({
-                "chunk_id": f"c{len(chunks):04d}",
+                "chunk_id": f"{doc['doc_id']}:c{len(chunks):04d}",
+                "doc_id": doc["doc_id"],
+                "doc_label": doc_label(doc),
+                "doc_type": doc["doc_type"],
+                "fiscal_year": doc["fiscal_year"],
                 "page": page["page"],
                 "section": section,
                 "heading": heading,
@@ -322,13 +337,16 @@ if __name__ == "__main__":
     from sentence_transformers import SentenceTransformer
 
     parser = argparse.ArgumentParser(description="Parsed pages -> chunks")
+    parser.add_argument("--doc", required=True, help="doc_id in data/sources.json")
     parser.add_argument("--parser", default="llamaparse", choices=["llamaparse", "pymupdf"])
     parser.add_argument("--strategy", default="v2", choices=["v2", "v1"])
-    parser.add_argument("--out", type=Path, help="default: data/chunks/<parser>.jsonl (v2) or <parser>_v1.jsonl")
     args = parser.parse_args()
 
-    parsed_dir = Path("data/parsed") / args.parser
-    pages = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(parsed_dir.glob("page_*.json"))]
+    doc = get_doc(args.doc)
+    pages = [json.loads(p.read_text(encoding="utf-8"))
+             for p in sorted(parsed_dir(doc, args.parser).glob("page_*.json"))]
+    if not pages:
+        raise SystemExit(f"no parsed pages in {parsed_dir(doc, args.parser)}")
 
     model = SentenceTransformer("BAAI/bge-small-en-v1.5")
     tokenizer = model.tokenizer
@@ -337,7 +355,6 @@ if __name__ == "__main__":
         # 특수 토큰([CLS], [SEP])은 빼고 센다. EMBED_LIMIT에 그 자리를 남겨 두었다
         return len(tokenizer.encode(text, add_special_tokens=False))
 
-    chunks = make_chunks(pages, count_tokens) if args.strategy == "v2" else make_chunks_v1(pages)
+    chunks = make_chunks(pages, count_tokens, doc) if args.strategy == "v2" else make_chunks_v1(pages, doc)
     report(chunks, count_tokens)
-    suffix = "" if args.strategy == "v2" else "_v1"
-    save_jsonl(chunks, args.out or Path(f"data/chunks/{args.parser}{suffix}.jsonl"))
+    save_jsonl(chunks, chunks_path(doc, args.parser, args.strategy))

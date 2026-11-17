@@ -2,7 +2,7 @@
 
 Usage:
     uv run --project backend --env-file .env python backend/rag/answer.py "Why did net income decrease?"
-    ... --k 5 --collection chunks_llamaparse_v2_2
+    ... --k 5 --collection docs_v2_2 --doc amat-10k-fy2025
 
 .env needs OPENAI_API_KEY and OPENAI_MODEL.
 """
@@ -49,28 +49,39 @@ Rules:
   set `status` to "partial", answer the supported part, and describe what is missing in `missing`.
   Never fill the gap with a plausible guess.
 - If the context contains nothing relevant, set `status` to "no_evidence" and return no sentences.
-- Be concise: at most 6 sentences.
 - Never claim the whole report lacks something. Say "the retrieved sections do not state ..." instead,
-  because you only see a few excerpts of the report."""
+  because you only see a few excerpts of the report.
+- Context chunks may come from different documents (e.g. FY2025 10-K and FY2024 10-K). The same year can
+  appear in both, sometimes with different figures (later reports may recast prior years).
+  Always say which document a figure comes from when more than one document is involved.
+- Be concise: at most 6 sentences."""
 
 
 # ---------- 2. 검색 ----------
 
-def retrieve(question: str, collection: str, k: int, embedder, milvus) -> list[dict]:
+def build_filter(docs: list[str] | None = None) -> str:
+    """기본은 본문만 (decision 014). docs를 주면 그 문서들만 (decision 019)."""
+    expr = 'section == "body"'
+    if docs:
+        expr += " and doc_id in [" + ", ".join(f'"{d}"' for d in docs) + "]"
+    return expr
+
+
+def retrieve(question: str, collection: str, k: int, embedder, milvus, docs: list[str] | None = None) -> list[dict]:
     vec = embedder.encode([question], normalize_embeddings=True)
     hits = milvus.search(
         collection,
         data=vec.tolist(),
         limit=k,
-        output_fields=["text", "page", "heading", "locations"],
-        filter='section == "body"',  # decision 014: 첨부 서류는 기본으로 제외
+        output_fields=["text", "page", "heading", "locations", "doc_id", "doc_label"],
+        filter=build_filter(docs),
     )[0]
     return [{"chunk_id": h.get("id", h.get("chunk_id")), **h["entity"]} for h in hits]
 
 
 def build_context(chunks: list[dict]) -> str:
     """청크마다 ID와 출처를 머리에 붙인다. LLM은 이 ID로 인용한다."""
-    parts = [f"[{c['chunk_id']}] (page {c['page']}, {c['heading']})\n{c['text']}" for c in chunks]
+    parts = [f"[{c['chunk_id']}] ({c['doc_label']}, page {c['page']}, {c['heading']})\n{c['text']}" for c in chunks]
     return "\n\n---\n\n".join(parts)
 
 
@@ -106,15 +117,15 @@ def validate(answer: Answer, chunks: list[dict]) -> list[str]:
 
 
 def show(answer: Answer, chunks: list[dict], problems: list[str]) -> None:
-    pages = {c["chunk_id"]: c["page"] for c in chunks}
+    where = {c["chunk_id"]: f"{c['doc_label']} p{c['page']}" for c in chunks}
     print(f"[{answer.status}]")
     for s in answer.sentences:
-        refs = ", ".join(f"{cid} p{pages.get(cid, '?')}" for cid in s.citations)
+        refs = ", ".join(where.get(cid, f"{cid}?") for cid in s.citations)
         tag = " (inferred)" if s.inferred else ""
         print(f"- {s.text}{tag}  [{refs}]")
     if answer.missing:
         print(f"missing: {answer.missing}")
-    print("\nretrieved:", ", ".join(f"{c['chunk_id']} p{c['page']}" for c in chunks))
+    print("\nretrieved:", ", ".join(where[c["chunk_id"]] for c in chunks))
     print("citation check:", "OK" if not problems else problems)
 
 
@@ -122,7 +133,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("question")
     parser.add_argument("--k", type=int, default=5)
-    parser.add_argument("--collection", default="chunks_llamaparse_v2_2")
+    parser.add_argument("--collection", default="docs_v2_2")
+    parser.add_argument("--doc", action="append", help="limit to these doc_ids (repeatable)")
     args = parser.parse_args()
 
     embedder = SentenceTransformer(EMBED_MODEL)
@@ -130,7 +142,7 @@ def main() -> None:
     milvus.load_collection(args.collection)
     llm = OpenAI()  # OPENAI_API_KEY 환경 변수를 읽는다
 
-    chunks = retrieve(args.question, args.collection, args.k, embedder, milvus)
+    chunks = retrieve(args.question, args.collection, args.k, embedder, milvus, args.doc)
     answer = generate(args.question, chunks, llm, os.environ["OPENAI_MODEL"])
     show(answer, chunks, validate(answer, chunks))
 

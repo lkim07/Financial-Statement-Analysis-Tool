@@ -1,13 +1,14 @@
 """Chunks (jsonl) -> embeddings -> Milvus collection.
 
-Usage: uv run --project backend python backend/ingest/index.py <chunks.jsonl> <collection_name>
-Example: ... data/chunks/llamaparse.jsonl chunks_llamaparse_v2_2
+Usage: uv run --project backend python backend/ingest/index.py --collection <name> --chunks <file.jsonl> [<file.jsonl> ...]
+Example: ... --collection docs_v2_2 --chunks data/chunks/amat-10k-fy2025/llamaparse.jsonl data/chunks/amat-10k-fy2024/llamaparse.jsonl
 
-컬렉션 이름에 청킹 버전을 넣는다. 버전마다 따로 저장해야 3-4에서 서로 비교할 수 있다.
+여러 문서를 한 컬렉션에 넣고, 문서는 메타데이터(doc_id, fiscal_year)로 구분한다 (decision 019).
+컬렉션 이름에는 청킹 버전이나 문서 구성을 넣어서, 서로 다른 구성을 나란히 비교할 수 있게 한다.
 """
 
+import argparse
 import json
-import sys
 from pathlib import Path
 
 from pymilvus import DataType, MilvusClient
@@ -31,7 +32,11 @@ def create_collection(client: MilvusClient, name: str) -> None:
 
     # 스키마: 어떤 필드를 어떤 타입으로 저장할지 미리 정한다 (SQL의 CREATE TABLE과 비슷)
     schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=False)
-    schema.add_field("chunk_id", DataType.VARCHAR, is_primary=True, max_length=32)
+    schema.add_field("chunk_id", DataType.VARCHAR, is_primary=True, max_length=64)  # 'amat-10k-fy2025:c0123'
+    schema.add_field("doc_id", DataType.VARCHAR, max_length=64)  # 필터: 특정 문서만
+    schema.add_field("doc_label", DataType.VARCHAR, max_length=32)  # 인용 표시: 'FY2025 10-K'
+    schema.add_field("doc_type", DataType.VARCHAR, max_length=16)  # 필터: 10-K / DEF 14A / 8-K
+    schema.add_field("fiscal_year", DataType.INT64)  # 필터: 특정 연도만
     schema.add_field("vector", DataType.FLOAT_VECTOR, dim=DIM)
     schema.add_field("text", DataType.VARCHAR, max_length=16384)  # 원문. LLM과 화면에 보여줄 것
     schema.add_field("page", DataType.INT64)
@@ -48,9 +53,12 @@ def create_collection(client: MilvusClient, name: str) -> None:
     client.create_collection(name, schema=schema, index_params=index_params)
 
 
-def main(chunks_path: str, collection: str) -> None:
-    chunks = load_chunks(Path(chunks_path))
-    print(f"loaded {len(chunks)} chunks from {chunks_path}")
+def main(collection: str, chunk_files: list[Path]) -> None:
+    chunks = []
+    for path in chunk_files:
+        part = load_chunks(path)
+        print(f"loaded {len(part)} chunks from {path}")
+        chunks += part
 
     # 임베딩은 embed_text(맥락 머리글 포함)로 만든다. 저장하는 text는 원문이다
     model = SentenceTransformer(MODEL_NAME)
@@ -67,6 +75,10 @@ def main(chunks_path: str, collection: str) -> None:
     rows = [
         {
             "chunk_id": c["chunk_id"],
+            "doc_id": c["doc_id"],
+            "doc_label": c["doc_label"],
+            "doc_type": c["doc_type"],
+            "fiscal_year": c["fiscal_year"],
             "vector": v.tolist(),
             "text": c["text"],
             "page": c["page"],
@@ -84,4 +96,8 @@ def main(chunks_path: str, collection: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    parser = argparse.ArgumentParser(description="Chunks -> Milvus collection")
+    parser.add_argument("--collection", required=True)
+    parser.add_argument("--chunks", required=True, nargs="+", type=Path)
+    args = parser.parse_args()
+    main(args.collection, args.chunks)

@@ -30,7 +30,7 @@ from typing import Literal
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-CHUNKS = Path("data/chunks/llamaparse.jsonl")
+CHUNKS_DIR = Path("data/chunks")
 LABELS = ["supported", "partially_supported", "unsupported"]
 
 
@@ -54,8 +54,12 @@ if the sources indeed do not contain X."""
 
 
 def load_chunks() -> dict[str, str]:
-    with open(CHUNKS, encoding="utf-8") as f:
-        return {c["chunk_id"]: c["text"] for c in (json.loads(line) for line in f if line.strip())}
+    """모든 문서의 LlamaParse 청크. 청크 ID에 문서 ID가 들어 있어서 겹치지 않는다."""
+    chunks = {}
+    for path in sorted(CHUNKS_DIR.glob("*/llamaparse.jsonl")):
+        with open(path, encoding="utf-8") as f:
+            chunks.update({c["chunk_id"]: c["text"] for c in (json.loads(line) for line in f if line.strip())})
+    return chunks
 
 
 def judge_sentence(llm, model: str, chunks: dict[str, str], question: str, sentence: str,

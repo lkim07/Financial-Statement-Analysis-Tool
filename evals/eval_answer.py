@@ -14,6 +14,7 @@ and appends one summary row to evals/results_answer.md.
 """
 
 import argparse
+import collections
 import datetime
 import json
 import os
@@ -26,7 +27,7 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "rag"))
 from answer import generate, retrieve, validate  # noqa: E402
-from eval_retrieval import DB_PATH, GOLDEN, norm
+from eval_retrieval import DB_PATH, GOLDEN, doc_of, norm
 from eval_retrieval import MODEL_NAME as EMBED_MODEL_NAME  # noqa: E402
 
 RUNS_DIR = Path("evals/runs")
@@ -44,16 +45,16 @@ def main(args) -> None:
 
     records, status_ok, valid, hit_scores = [], 0, 0, []
     for q in golden:
-        chunks = retrieve(q["question"], args.collection, args.k, embedder, milvus)
+        chunks = retrieve(q["question"], args.collection, args.k, embedder, milvus, args.doc)
         answer = generate(q["question"], chunks, llm, model_name)
         problems = validate(answer, chunks)
 
         # 1) status: 답이 없는 질문은 no_evidence, 나머지는 answered 또는 partial이어야 한다
         expected_none = q["type"] == "unanswerable"
         if expected_none:
-            ok = answer.status != "answered"      # 없다고 하거나, 관련 사실만 주고 없는 부분을 밝히면 통과
+            ok = answer.status != "answered"  # 없다고 하거나, 관련 사실만 주고 없는 부분을 밝히면 통과 (decision 015)
         else:
-            ok = answer.status != "no_evidence"   # 답이 있는 질문은 최소한 일부라도 답해야 통과
+            ok = answer.status != "no_evidence"
         status_ok += ok
 
         # 2) 인용 형식
@@ -61,11 +62,15 @@ def main(args) -> None:
 
         # 3) 실제로 인용한 청크 안에 golden 인용문이 들어 있나
         cited = {cid for s in answer.sentences for cid in s.citations}
-        cited_text = " ".join(norm(c["text"]) for c in chunks if c["chunk_id"] in cited)
+        # 문서별로 인용한 텍스트를 모은다: 근거는 같은 문서의 청크에서 찾아야 인정한다
+        cited_text = collections.defaultdict(str)
+        for c in chunks:
+            if c["chunk_id"] in cited:
+                cited_text[c["doc_id"]] += " " + norm(c["text"])
         if q["evidence"]:
             # 원래 인용문이나 alternatives 중 하나라도 인용한 청크 안에 있으면 성공
             hits = sum(
-                any(norm(opt["quote"]) in cited_text for opt in [ev, *ev.get("alternatives", [])])
+                any(norm(opt["quote"]) in cited_text[doc_of(opt)] for opt in [ev, *ev.get("alternatives", [])])
                 for ev in q["evidence"]
             )
             hit_scores.append(hits / len(q["evidence"]))
@@ -117,7 +122,8 @@ def main(args) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Golden-set answer evaluation")
-    parser.add_argument("--collection", default="chunks_llamaparse_v2_2")
+    parser.add_argument("--collection", default="docs_v2_2")
+    parser.add_argument("--doc", action="append", help="search only these doc_ids (repeatable)")
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--note", default="")
     main(parser.parse_args())
