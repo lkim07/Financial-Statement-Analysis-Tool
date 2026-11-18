@@ -5,6 +5,32 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 022 Financial numbers in a SQLite facts table, with arithmetic checks
+
+Date: 2026-11-18
+Status: accepted
+
+Context: "Why did profit change" needs exact numbers. LLMs read and add numbers unreliably,
+and retrieval cannot see that the tax line is the main driver of a net income change.
+
+Decision: Extract the income statement from LlamaParse table chunks into SQLite
+`facts(doc_id, statement, item, label, period, value, unit, page, chunk_id)` (long format).
+- `item` is a normalized key; `label` keeps the original wording.
+  Different labels for the same concept share a key
+  (FY2024 "Severance and related charges" and FY2025 "Restructuring charges" → `restructuring`).
+- Section label rows prefix the rows below them ("Earnings per share: Basic").
+- Five arithmetic checks (gross profit, total opex, operating income, pretax, net income),
+  tolerance 1 (USD millions).
+- `chunk_id` per number, so a number can be highlighted like a quote.
+
+Consequences:
+- The first FY2024 run failed one check (2022 total opex off by 4).
+  The cause was an unmapped label holding a reversal of (4). Checks catch mapping gaps, not just parse errors.
+- FY2024 net income is 7,177 in both reports (segments were recast, consolidated totals were not).
+- SQLite runs in CI; it can move to a managed DB in Phase 9.
+
+---
+
 ## 021 Rule-based document router (year → report Y and Y+1, no year → latest)
 
 Date: 2026-11-16
