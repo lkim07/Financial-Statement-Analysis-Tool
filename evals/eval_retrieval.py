@@ -3,6 +3,7 @@
 Usage:
     uv run --project backend python evals/eval_retrieval.py --collection docs_v2_2 --body-only
     ... --k 5 --prefix --body-only --note "bge query prefix"
+    ... --route rule --k 10 --decompose --coverage 0.8 --note "bridge decomposition"
 
 Metrics (unanswerable questions are skipped):
 - page recall@k:  share of gold evidence items whose page (or an alternative's page) is in the top-k
@@ -26,11 +27,13 @@ from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "rag"))
 from router import load_docs, route_docs  # noqa: E402
+from decompose import merge_seats, plan  # noqa: E402
 
 DB_PATH = "data/milvus.db"
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 BGE_PREFIX = "Represent this sentence for searching relevant passages: "
 GOLDEN = Path("evals/golden.jsonl")
+FIELDS = ["page", "heading", "locations", "doc_id", "doc_label"]
 RESULTS = Path("evals/results.md")
 DEFAULT_DOC = "amat-10k-fy2025"  # doc이 없는 근거는 첫 문서(FY2025 10-K)의 것이다
 
@@ -79,6 +82,7 @@ def evaluate(args) -> None:
     vectors = model.encode(texts, normalize_embeddings=True)
 
     registry = load_docs()
+    decomposed_ids = set()
     page_scores, quote_scores, lines = [], [], []
     for q, vec in zip(questions, vectors):
         docs = question_docs(q, args, registry)
@@ -87,10 +91,28 @@ def evaluate(args) -> None:
             args.collection,
             data=[vec.tolist()],
             limit=total,
-            output_fields=["page", "heading", "locations", "doc_id", "doc_label"],
+            output_fields=FIELDS,
             filter=search_filter(args, docs),
         )[0]
         top = hits[: args.k]
+        p = plan(q["question"], registry, args.coverage) if args.decompose else None
+        if p:
+            # 원인 검색어마다 driver_k개씩 더 찾고, 합쳐서 k개만 남긴다 (k = LLM에 넘길 청크 수)
+            driver_vecs = model.encode([d["query"] for d in p["drivers"]], normalize_embeddings=True)
+            per_driver = [
+                client.search(args.collection, data=[v.tolist()], limit=args.driver_k,
+                              output_fields=FIELDS, filter=search_filter(args, docs))[0]
+                for v in driver_vecs
+            ]
+            # 고정석: 브리지 숫자가 나온 청크를 검색 없이 id로 가져온다
+            fixed = [] if args.no_statement_seat else [
+                {"id": r["chunk_id"], "entity": r}
+                for r in client.get(args.collection, ids=p["statement_chunks"], output_fields=FIELDS)
+            ]
+            top = merge_seats(hits, per_driver, budget=args.k, key=hit_id,
+                              fixed=fixed, keep_original=args.keep_original)
+            decomposed_ids.add(q["id"])
+        top_ids = [hit_id(h) for h in top]
 
         top_pages = set().union(*(chunk_pages(h["entity"]) for h in top))
 
@@ -106,15 +128,17 @@ def evaluate(args) -> None:
             if not owners:
                 details.append(f"    - p{ev['page']} NOT IN INDEX: {ev['quote']!r}")
                 continue
-            # 여러 위치 중 가장 높은 순위로 잡힌 것
+            # 넘긴 k개 안에 있으면 성공. 표시는 넘긴 목록의 자리, 없으면 원래 질문 검색의 순위
+            in_top = [(i + 1, h) for i, h in enumerate(top) if hit_id(h) in owners]
+            if in_top:
+                slot, best = in_top[0]
+                quote_hits += 1
+                details.append(f"    + {best['entity']['doc_label']} p{best['entity']['page']} slot {slot}: {ev['quote']!r}")
+                continue
             ranked = [(i + 1, h) for i, h in enumerate(hits) if hit_id(h) in owners]
             rank, best = ranked[0] if ranked else (None, None)
             where = f"{best['entity']['doc_label']} p{best['entity']['page']}" if best else f"p{ev['page']}"
-            if rank is not None and rank <= args.k:
-                quote_hits += 1
-                details.append(f"    + {where} rank {rank}: {ev['quote']!r}")
-            else:
-                details.append(f"    - {where} rank {rank}: {ev['quote']!r}")
+            details.append(f"    - {where} rank {rank}: {ev['quote']!r}")
         page_recall = page_hits / len(q["evidence"])
         quote_recall = quote_hits / len(q["evidence"])
 
@@ -123,6 +147,8 @@ def evaluate(args) -> None:
 
         retrieved = ", ".join(f"{h['entity']['doc_label'][2:6]}:p{h['entity']['page']}" for h in top)
         routed = ",".join(d[-4:] for d in docs) if docs else "all"
+        if p:
+            routed += " | decompose " + ",".join(d["item"] for d in p["drivers"])
         lines.append(f"{q['id']} [{q['type']}] docs {routed} | page {page_recall:.2f} | quote {quote_recall:.2f} | top{args.k}: {retrieved}")
         lines.extend(details)
 
@@ -130,9 +156,16 @@ def evaluate(args) -> None:
     mean_quote = sum(quote_scores) / len(quote_scores)
 
     print("\n".join(lines))
-    print(f"\n{args.collection}  k={args.k}  body_only={args.body_only}  docs={args.doc or 'per route'}  route={args.route}  n={len(questions)}")
+    print(f"\n{args.collection}  k={args.k}  body_only={args.body_only}  docs={args.doc or 'per route'}  route={args.route}"
+          f"  decompose={args.decompose}  n={len(questions)}")
     print(f"page recall@{args.k}:  {mean_page:.2f}")
     print(f"quote recall@{args.k}: {mean_quote:.2f}")
+    if args.decompose:
+        # 전체 평균은 분해 대상(몇 개 안 됨)의 변화를 희석한다: 대상만 따로 보여 준다
+        sub = [qs for q, qs in zip(questions, quote_scores) if q["id"] in decomposed_ids]
+        if sub:
+            print(f"  decomposed subset (n={len(sub)}: {', '.join(sorted(decomposed_ids))}) "
+                  f"quote recall: {sum(sub) / len(sub):.2f}")
 
     append_result(args, mean_page, mean_quote, len(questions))
 
@@ -174,7 +207,8 @@ def append_result(args, mean_page: float, mean_quote: float, n: int) -> None:
         )
     row = (
         f"| {datetime.date.today()} | {args.collection} | {args.k} | {args.prefix} | {args.body_only} "
-        f"| {mean_page:.2f} | {mean_quote:.2f} | {n} | {args.note}{' [docs: ' + ', '.join(args.doc) + ']' if args.doc else ' [route: ' + args.route + ']'} |\n"
+        f"| {mean_page:.2f} | {mean_quote:.2f} | {n} | {args.note}{' [docs: ' + ', '.join(args.doc) + ']' if args.doc else ' [route: ' + args.route + ']'}"
+        f"{f' [decompose cov {args.coverage} dk {args.driver_k} keep {args.keep_original}' + (' no-stmt' if args.no_statement_seat else '') + ']' if args.decompose else ''} |\n"
     )
     with open(RESULTS, "a", encoding="utf-8") as f:
         f.write(row)
@@ -190,5 +224,12 @@ if __name__ == "__main__":
     parser.add_argument("--doc", action="append", help="search only these doc_ids for every question (repeatable)")
     parser.add_argument("--route", default="none", choices=["none", "oracle", "rule"],
                         help="pick documents per question (ignored when --doc is given)")
+    parser.add_argument("--decompose", action="store_true",
+                        help="add bridge-driver queries for net-income-change questions; k = chunks passed on")
+    parser.add_argument("--coverage", type=float, default=0.8, help="cumulative |contribution| share of drivers")
+    parser.add_argument("--driver-k", type=int, default=3, help="hits per driver query")
+    parser.add_argument("--keep-original", type=int, default=4, help="seats reserved for the original question")
+    parser.add_argument("--no-statement-seat", action="store_true",
+                        help="do not add the income statement chunk the bridge used")
     parser.add_argument("--note", default="")
     evaluate(parser.parse_args())

@@ -5,6 +5,40 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 023 Bridge-driven query decomposition for net income questions
+
+Date: 2026-11-22
+Status: accepted (coverage 0.8 is an unvalidated default)
+
+Context: "Why did net income change" questions failed retrieval since Phase 3.
+The evidence uses different words (deferred tax remeasurement) than the question (net income),
+and k=10 alone did not help (the tax sentence stayed at rank 20).
+
+Decision: For net income change questions (not EPS):
+- Compute the bridge from the year-Y report (decision 022).
+- Pick drivers by cumulative |contribution| up to 80% (min 1, max 4).
+  The share uses the sum of |contributions|, not the net change, because drivers offset.
+- One report-style query per driver (HyDE), using only generic 10-K vocabulary.
+- Seats within a fixed budget k=10:
+  1. the income statement chunk the bridge used (fixed seat, no search)
+  2. the original question's top 4
+  3. each driver's top hit
+  4. round-robin fill
+
+Results (k=10, rule router, 45 scored; baseline re-run after adding alternatives):
+| setting | subset q01,q42 | all |
+| baseline k=10 | 0.25 | 0.86 |
+| v1: drivers first, no fixed seat | 0.38 | 0.86 |
+| v2: fixed seat + keep original 4 | 1.00 | 0.89 |
+
+Consequences:
+- v1 found the tax sentences but pushed out the original question's results; v2 fixed the seat order.
+- Numeric evidence comes from the facts table, not retrieval.
+- Same chunk budget as the baseline, so LLM cost is unchanged.
+- Limits: n=2; only net income questions; templates untested on other companies.
+
+---
+
 ## 022 Financial numbers in a SQLite facts table, with arithmetic checks
 
 Date: 2026-11-18

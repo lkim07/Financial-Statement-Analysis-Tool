@@ -25,3 +25,7 @@
 | 2026-11-16 | docs_v2_2 | 5 | False | True | 0.86 | 0.76 | 45 | 50q rule router [route: rule] |
 | 2026-11-16 | docs_v2_2 | 5 | False | True | 0.86 | 0.76 | 45 | 50q rule router, q41 alternatives [route: rule] |
 | 2026-11-16 | docs_v2_2 | 5 | False | True | 0.86 | 0.76 | 45 | 50q rule router, q41 alternatives [route: rule] |
+| 2026-11-22 | docs_v2_2 | 10 | False | True | 0.92 | 0.86 | 45 | 50q rule k10 baseline [route: rule] |
+| 2026-11-22 | docs_v2_2 | 10 | False | True | 0.92 | 0.86 | 45 | bridge decomposition [route: rule] [decompose cov 0.8 dk 3] |
+| 2026-11-22 | docs_v2_2 | 10 | False | True | 0.92 | 0.86 | 45 | 50q rule k10 baseline, p7 alternatives [route: rule] |
+| 2026-11-22 | docs_v2_2 | 10 | False | True | 0.92 | 0.89 | 45 | decompose v2: statement seat + keep 4 [route: rule] [decompose cov 0.8 dk 3 keep 4] |
