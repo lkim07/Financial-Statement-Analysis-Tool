@@ -50,7 +50,12 @@ Labels:
 - unsupported: the main claim is not in the sources, or contradicts them.
 
 Statements that something is NOT in the report (e.g. "the report does not state X") are supported
-if the sources indeed do not contain X."""
+if the sources indeed do not contain X.
+
+Sources whose ID starts with "calc:" are COMPUTED: exact calculations made by code from the report's
+financial statements (e.g. each line item's contribution to a change in net income). Treat their numbers
+as facts. They support amounts and contributions, not causes: a reason ("because of tax credits") must
+still be stated in a report source."""
 
 
 def load_chunks() -> dict[str, str]:
@@ -78,6 +83,10 @@ def judge_sentence(llm, model: str, chunks: dict[str, str], question: str, sente
 
 def judge(run_path: Path) -> None:
     chunks = load_chunks()
+    # 계산 출처(브리지)는 청크 파일에 없다: 실행 기록에 함께 저장된 텍스트를 쓴다
+    for line in run_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            chunks.update(json.loads(line).get("computed", {}))
     llm = OpenAI()
     model = os.environ.get("JUDGE_MODEL") or os.environ["OPENAI_MODEL"]
     out_path = run_path.parent / f"judge_{run_path.name}"
@@ -147,6 +156,8 @@ def adversarial(cases_path: Path) -> None:
     """일부러 틀린 문장을 심어서, 판정관이 잡아내는지 본다. 정답 라벨이 확실한 시험이다."""
     cases = [json.loads(l) for l in cases_path.read_text(encoding="utf-8-sig").splitlines() if l.strip()]
     chunks = load_chunks()
+    for c in cases:  # 계산 출처를 쓰는 시험 문항은 그 텍스트를 직접 들고 있다
+        chunks.update(c.get("computed", {}))
     llm = OpenAI()
     model = os.environ.get("JUDGE_MODEL") or os.environ["OPENAI_MODEL"]
 
