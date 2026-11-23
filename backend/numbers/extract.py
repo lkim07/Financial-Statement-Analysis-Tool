@@ -7,6 +7,7 @@
 
 입력: data/chunks/<doc_id>/llamaparse.jsonl 의 표 청크 (LlamaParse 마크다운 표)
 출력: data/numbers.db (SQLite) 의 facts 테이블
+대상: 손익계산서(income_statement), 현금흐름표(cash_flow: 필요한 행만)
 """
 
 import argparse
@@ -52,6 +53,23 @@ INCOME_STATEMENT_ITEMS = {
 # 섹션 라벨 행("Operating expenses:")은 다음 소계/합계 행에서 끝나야 한다.
 # 이 라벨이 나오면 섹션을 닫는다: Total operating expenses 다음의 Income from operations는 섹션 밖이다.
 SECTION_ENDS = {"Total operating expenses"}
+
+# 현금흐름표는 행이 40개가 넘는다. 브리지와 질문에 쓰는 행만 고르고 나머지는 조용히 건너뛴다.
+# 섹션 라벨이 여러 겹이라("Cash flows from operating activities:" 아래 "Adjustments ...:")
+# 섹션을 뺀 맨 끝 라벨로 찾는다. 현금흐름표에는 같은 이름의 행이 두 번 나오지 않는다.
+CASH_FLOW_ITEMS = {
+    "Net income": "net_income",
+    "Depreciation and amortization": "depreciation_amortization",
+    "Deferred income taxes": "deferred_income_taxes",
+    "(Gain) loss and impairments on investments, net": "investment_gains_losses",
+    "Share-based compensation": "share_based_compensation",
+    "Cash provided by operating activities": "operating_cash_flow",
+    "Capital expenditures": "capital_expenditures",
+    "Cash used in investing activities": "investing_cash_flow",
+    "Common stock repurchases": "share_repurchases",
+    "Payments of dividends to stockholders": "dividends_paid",
+    "Cash used in financing activities": "financing_cash_flow",
+}
 
 UNITS = {"eps_basic": "USD_per_share", "eps_diluted": "USD_per_share",
          "shares_basic": "shares_millions", "shares_diluted": "shares_millions"}
@@ -134,35 +152,62 @@ def parse_table(text: str) -> list[dict]:
 
 
 def find_statement_chunks(chunks: list[dict], heading: str) -> list[dict]:
-    """제목이 heading인 표 청크들. 표가 행 단위로 쪼개졌을 수 있으니 첫 페이지의 것을 전부 돌려준다."""
+    """제목이 heading인 표 청크들.
+
+    표가 행 단위로 쪼개졌을 수 있고, 다음 페이지로 이어질 수도 있다 ("— (Continued)").
+    첫 페이지부터 페이지가 끊기지 않고 이어지는 동안의 청크를 전부 돌려준다.
+    (재무제표 본표만 잡고, 한참 뒤 주석에 같은 제목이 나와도 섞이지 않게)
+    """
     matches = [c for c in chunks
                if c["type"] == "table" and heading.lower() in (c.get("heading") or "").lower()
                and c.get("section", "body") == "body"]
     if not matches:
         return []
-    first_page = min(c["page"] for c in matches)
-    return [c for c in matches if c["page"] == first_page]
+    pages = sorted({c["page"] for c in matches})
+    run = [pages[0]]
+    for p in pages[1:]:
+        if p != run[-1] + 1:
+            break
+        run.append(p)
+    return [c for c in matches if c["page"] in run]
 
 
-def extract_income_statement(chunks: list[dict], doc_id: str) -> list[dict]:
+def extract_statement(chunks: list[dict], doc_id: str, statement: str, heading: str,
+                      items: dict[str, str], by_last_label: bool = False, warn: bool = True) -> list[dict]:
+    """재무제표 하나 -> facts. items: 원문 라벨 -> 정규화한 키.
+
+    by_last_label: 섹션 접두어를 떼고 맨 끝 라벨로 찾는다 (현금흐름표).
+    warn: 키 목록에 없는 라벨을 알린다 (손익계산서는 모든 행을 써야 하니 켠다).
+    """
     facts, unknown = [], set()
-    for chunk in find_statement_chunks(chunks, "STATEMENTS OF OPERATIONS"):
+    for chunk in find_statement_chunks(chunks, heading):
         for row in parse_table(chunk["text"]):
-            item = INCOME_STATEMENT_ITEMS.get(row["label"])
+            label = row["label"].split(": ")[-1] if by_last_label else row["label"]
+            item = items.get(label)
             if item is None:
                 unknown.add(row["label"])
                 continue
             facts.append({
-                "doc_id": doc_id, "statement": "income_statement", "item": item,
+                "doc_id": doc_id, "statement": statement, "item": item,
                 "label": row["label"], "period": row["period"], "value": row["value"],
                 "unit": UNITS.get(item, "USD_millions"),
                 "page": chunk["page"], "chunk_id": chunk["chunk_id"],
             })
-    for label in sorted(unknown):
-        print(f"  [warn] {doc_id}: unmapped label '{label}'")
+    if warn:
+        for label in sorted(unknown):
+            print(f"  [warn] {doc_id}: unmapped label '{label}'")
     # 표가 쪼개지며 헤더 행이 반복되면 같은 숫자가 두 번 나올 수 있다: (item, period)로 하나만 남긴다
     unique = {(f["item"], f["period"]): f for f in facts}
     return list(unique.values())
+
+
+def extract_income_statement(chunks: list[dict], doc_id: str) -> list[dict]:
+    return extract_statement(chunks, doc_id, "income_statement", "STATEMENTS OF OPERATIONS", INCOME_STATEMENT_ITEMS)
+
+
+def extract_cash_flow(chunks: list[dict], doc_id: str) -> list[dict]:
+    return extract_statement(chunks, doc_id, "cash_flow", "STATEMENTS OF CASH FLOWS", CASH_FLOW_ITEMS,
+                             by_last_label=True, warn=False)
 
 
 # --- 검산 (합계 = 항목들의 합) ----------------------------------------------
@@ -179,8 +224,23 @@ INCOME_STATEMENT_CHECKS = [
 OPTIONAL = {"restructuring"}  # 없는 해에는 행 자체가 없을 수 있다 -> 0으로 본다
 
 
+def check_cross_statement(facts: list[dict], tolerance: float = 1.0) -> list[str]:
+    """손익계산서와 현금흐름표의 순이익이 같은가. 다르면 둘 중 하나를 잘못 읽은 것이다."""
+    ni = {}
+    for f in facts:
+        if f["item"] == "net_income":
+            ni.setdefault((f["doc_id"], f["period"]), {})[f["statement"]] = f["value"]
+    errors = []
+    for (doc_id, period), by_stmt in sorted(ni.items()):
+        if len(by_stmt) == 2 and abs(by_stmt["income_statement"] - by_stmt["cash_flow"]) > tolerance:
+            errors.append(f"{doc_id} {period} net_income: income statement {by_stmt['income_statement']:,.0f}"
+                          f" vs cash flow {by_stmt['cash_flow']:,.0f}")
+    return errors
+
+
 def check_income_statement(facts: list[dict], tolerance: float = 1.0) -> list[str]:
     """검산이 틀린 곳을 문자열 목록으로. 반올림 때문에 1(백만 달러)까지는 허용한다."""
+    facts = [f for f in facts if f.get("statement", "income_statement") == "income_statement"]
     values = {(f["doc_id"], f["period"], f["item"]): f["value"] for f in facts}
     errors = []
     for doc_id, period in sorted({(f["doc_id"], f["period"]) for f in facts}):
@@ -245,13 +305,15 @@ def main():
     all_facts = []
     for doc_id in args.doc:
         doc = get_doc(doc_id)
-        facts = extract_income_statement(load_chunks(chunks_path(doc, args.parser)), doc_id)
-        pages = sorted({f["page"] for f in facts})
-        periods = sorted({f["period"] for f in facts})
-        print(f"{doc_id}: {len(facts)} facts, page {pages}, periods {periods}")
-        all_facts += facts
+        chunks = load_chunks(chunks_path(doc, args.parser))
+        for name, facts in [("income statement", extract_income_statement(chunks, doc_id)),
+                            ("cash flow", extract_cash_flow(chunks, doc_id))]:
+            pages = sorted({f["page"] for f in facts})
+            periods = sorted({f["period"] for f in facts})
+            print(f"{doc_id} {name}: {len(facts)} facts, page {pages}, periods {periods}")
+            all_facts += facts
 
-    errors = check_income_statement(all_facts)
+    errors = check_income_statement(all_facts) + check_cross_statement(all_facts)
     for e in errors:
         print(f"  [check] {e}")
     print("checks: OK" if not errors else f"checks: {len(errors)} failed")

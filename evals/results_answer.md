@@ -12,3 +12,4 @@
 | 2026-11-22 | gpt-6-luna | docs_v2_2 | 10 | 50/50 | 50/50 | 0.81 | answers_20261122-034948.jsonl | k10 rule baseline [route rule, numbers ok 44/50] |
 | 2026-11-22 | gpt-6-luna | docs_v2_2 | 10 | 50/50 | 50/50 | 0.81 | answers_20261122-035312.jsonl | k10 rule + bridge [route rule, decompose, numbers ok 44/50] |
 | 2026-11-22 | gpt-6-luna | docs_v2_2 | 10 | 2/2 | 2/2 | 1.00 | answers_20261122-040314.jsonl | bridge v2: form names, source_chunks [route rule, decompose, numbers ok 2/2] |
+| 2026-11-23 | gpt-6-luna | docs_v2_2 | 10 | 2/2 | 2/2 | 0.50 | answers_20261123-055117.jsonl | EPS bridge [route rule, decompose, numbers ok 2/2] |

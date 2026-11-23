@@ -10,12 +10,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "numbers"), str(ROOT / "ingest")]
-from bridge import load_facts, net_income_bridge  # noqa: E402
+from bridge import eps_bridge, load_facts, net_income_bridge  # noqa: E402
 from registry import doc_label, get_doc  # noqa: E402
 
 
 def computed_source(p: dict, facts_loader=None, label_of=None) -> dict:
     """브리지를 LLM이 인용할 수 있는 '계산 출처' 하나로 만든다. 숫자는 전부 코드가 계산했다."""
+    if p.get("kind") == "eps":
+        return eps_computed_source(p, facts_loader, label_of)
     facts = (facts_loader or load_facts)(p["bridge_doc"])
     b = net_income_bridge(facts, p["year"])
     label = (label_of or (lambda d: doc_label(get_doc(d))))(p["bridge_doc"])
@@ -34,6 +36,33 @@ def computed_source(p: dict, facts_loader=None, label_of=None) -> dict:
             "heading": "net income bridge", "text": "\n".join(lines), "computed": True,
             # 출처의 출처: 이 계산에 쓴 손익계산서 청크. 대시보드는 이 청크의 행을 하이라이트한다
             "source_chunks": sorted({d["chunk_id"] for d in b["drivers"] if d["chunk_id"]})}
+
+
+def eps_computed_source(p: dict, facts_loader=None, label_of=None) -> dict:
+    facts = (facts_loader or load_facts)(p["bridge_doc"])
+    b = eps_bridge(facts, p["year"])
+    label = (label_of or (lambda d: doc_label(get_doc(d))))(p["bridge_doc"])
+    e = b["effects"]
+    ni_pct = (b["net_income"] / b["net_income_prior"] - 1) * 100
+    sh_pct = (b["shares"] / b["shares_prior"] - 1) * 100
+    lines = [
+        f"Diluted EPS bridge, fiscal {b['prior_year']} -> {b['year']}, computed by code from the {label} "
+        f"financial statements (pages {', '.join(map(str, b['pages']))}).",
+        f"Diluted EPS: {b['eps_prior']:.2f} -> {b['eps']:.2f} (reported change {b['reported_change']:+.2f}).",
+        f"- Net income effect: net income {b['net_income_prior']:,.0f} -> {b['net_income']:,.0f} USD millions "
+        f"({ni_pct:+.1f}%), contribution {e['net_income']:+.2f} per share",
+        f"- Share count effect: diluted weighted average shares {b['shares_prior']:,.0f} -> {b['shares']:,.0f} "
+        f"million ({sh_pct:+.1f}%), contribution {e['shares']:+.2f} per share",
+    ]
+    if b["repurchases"] is not None:
+        lines.append(f"Common stock repurchases in fiscal {b['year']} (cash flow statement): "
+                     f"{b['repurchases']:,.0f} USD millions.")
+    lines.append("Each effect is the average over both orders of applying the two changes; "
+                 "the order changes the split, not the total.")
+    return {"chunk_id": f"calc:eps:{p['bridge_doc']}:{p['year']}", "doc_id": p["bridge_doc"],
+            "doc_label": f"COMPUTED from {label}", "page": b["pages"][0],
+            "heading": "diluted EPS bridge", "text": "\n".join(lines), "computed": True,
+            "source_chunks": b["chunk_ids"]}
 
 
 def expand_citations(cited: set[str], sources: list[dict]) -> set[str]:

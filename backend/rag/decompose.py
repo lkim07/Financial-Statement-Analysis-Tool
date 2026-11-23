@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "numbers"))
-from bridge import load_facts, net_income_bridge  # noqa: E402
+from bridge import eps_bridge, load_facts, net_income_bridge  # noqa: E402
 
 # {dir}: 그 항목이 늘었으면 "increased", 줄었으면 "decreased"
 DRIVER_QUERIES = {
@@ -34,6 +34,9 @@ DRIVER_QUERIES = {
     "marketing_selling": "Marketing and selling expenses {dir} primarily due to employee-related costs",
     "restructuring": "Restructuring charges related to workforce reduction and severance",
     "interest_expense": "Interest expense {dir} due to changes in outstanding debt and senior notes",
+    # EPS 브리지의 주식 수 효과
+    "shares_diluted": "Weighted average shares outstanding {dir} primarily due to repurchases of common stock "
+                      "under the stock repurchase program",
 }
 
 # 순이익 변화를 묻는가: "net income", "net earnings", "profit" + 변화/원인 단어.
@@ -42,11 +45,19 @@ PROFIT = re.compile(r"\b(net income|net earnings|net profit|profit)\b", re.IGNOR
 CHANGE = re.compile(r"\b(why|increase[ds]?|decrease[ds]?|decline[ds]?|change[ds]?|drop(ped)?|grow|grew)\b",
                     re.IGNORECASE)
 EPS = re.compile(r"\b(eps|per share)\b", re.IGNORECASE)
+# 분해는 "왜"를 묻는 질문에만: "얼마나 변했나"(숫자 질문)에 붙이면 고정석과 원인 검색어가
+# 원래 질문의 자리를 빼앗는다 (q50: 1.00 -> 0.00). 질문 유형 라우터(7-5)가 나중에 이 역할을 맡는다.
+WHY = re.compile(r"\b(why|reasons?|explain\w*|drove|drivers?|driven|caused?|causes)\b", re.IGNORECASE)
 YEAR = re.compile(r"\b(?:fy|fiscal(?:\s+year)?)\s?(20\d{2})\b", re.IGNORECASE)
 
 
 def is_profit_change_question(question: str) -> bool:
-    return bool(PROFIT.search(question) and CHANGE.search(question) and not EPS.search(question))
+    return bool(WHY.search(question) and PROFIT.search(question) and CHANGE.search(question)
+                and not EPS.search(question))
+
+
+def is_eps_change_question(question: str) -> bool:
+    return bool(WHY.search(question) and EPS.search(question) and CHANGE.search(question))
 
 
 def bridge_source(question: str, registry: list[dict]) -> tuple[str, int] | None:
@@ -91,9 +102,12 @@ def driver_query(driver: dict) -> str:
 def plan(question: str, registry: list[dict], coverage: float = 0.8, facts_loader=load_facts) -> dict | None:
     """이 질문에 대한 분해 계획. 해당 없는 질문이면 None.
 
-    {"bridge_doc", "year", "drivers": [{"item", "contribution", "query"}...],
-     "statement_chunks": [브리지 숫자가 나온 청크 id들]}
+    {"kind": "net_income" | "eps", "bridge_doc", "year",
+     "drivers": [{"item", "contribution", "query"}...],
+     "statement_chunks": [브리지 숫자가 나온 청크 id들 = 고정석]}
     """
+    if is_eps_change_question(question):
+        return eps_plan(question, registry, coverage, facts_loader)
     if not is_profit_change_question(question):
         return None
     source = bridge_source(question, registry)
@@ -106,14 +120,45 @@ def plan(question: str, registry: list[dict], coverage: float = 0.8, facts_loade
     bridge = net_income_bridge(facts, year)
     drivers = select_drivers(bridge, coverage)
     statement_chunks = sorted({f["chunk_id"] for f in facts
-                               if f["period"] in (year, year - 1)
+                               if f.get("statement", "income_statement") == "income_statement"
+                               and f["period"] in (year, year - 1)
                                and f["item"] in {"net_income", *(d["item"] for d in drivers)}})
     return {
+        "kind": "net_income",
         "bridge_doc": doc_id,
         "year": year,
         "drivers": [{"item": d["item"], "contribution": d["contribution"], "query": driver_query(d)}
                     for d in drivers],
         "statement_chunks": statement_chunks,
+    }
+
+
+def eps_plan(question: str, registry: list[dict], coverage: float, facts_loader) -> dict | None:
+    """EPS = 순이익 / 주식 수. 원인은 두 갈래다.
+
+    - 주식 수 효과: 자사주 매입 (현금흐름표, 주식 수 행)
+    - 순이익 효과: 순이익 브리지의 가장 큰 원인 1개 (FY2025라면 세금)
+    고정석: 손익계산서(EPS, 주식 수, 순이익 행) + 현금흐름표(자사주 매입 행)
+    """
+    source = bridge_source(question, registry)
+    if source is None:
+        return None
+    doc_id, year = source
+    facts = facts_loader(doc_id)
+    if not facts:
+        return None
+    eb = eps_bridge(facts, year)
+    shares = {"item": "shares_diluted", "current": eb["shares"], "prior": eb["shares_prior"],
+              "contribution": eb["effects"]["shares"]}
+    ni_top = select_drivers(net_income_bridge(facts, year), coverage, max_drivers=1)
+    drivers = [shares, *ni_top]
+    return {
+        "kind": "eps",
+        "bridge_doc": doc_id,
+        "year": year,
+        "drivers": [{"item": d["item"], "contribution": d["contribution"], "query": driver_query(d)}
+                    for d in drivers],
+        "statement_chunks": eb["chunk_ids"],
     }
 
 

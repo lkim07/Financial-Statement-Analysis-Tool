@@ -4,6 +4,42 @@ Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
 
+
+---
+
+## 025 EPS bridge (Shapley), cash flow facts, and decomposition only for "why" questions
+
+Date: 2026-11-23
+Status: accepted
+
+Context: q03 asks why diluted EPS rose while net income fell. The cause (share repurchases) is on the
+cash flow statement, ranked 68th by retrieval.
+
+Decision:
+- Extract 11 cash flow rows (by last label, nested sections).
+  Check that net income matches across the income and cash flow statements.
+- EPS bridge: change = net income effect + share count effect.
+  The split depends on order (the interaction term goes to whichever changes second),
+  so use the average of both orders (Shapley). FY2025: -0.218 / +0.273 (orders: -0.215/+0.270, -0.222/+0.277).
+  Allow 0.02 against reported EPS (cents and millions are rounded).
+- EPS "why" questions:
+  - fixed seats: income statement + cash flow chunks
+  - queries: share repurchases + the top net income driver
+  - computed source: `calc:eps:...`
+- Decomposition runs only for "why" questions. Applying it to q50 ("how much did EPS grow")
+  dropped it from 1.00 to 0.00: fixed seats pushed out the original answer.
+
+Results (k=10, rule router, 45 scored):
+| | quote recall | decomposed subset |
+| net income decomposition | 0.89 | q01, q42 = 1.00 |
+| + EPS, why-only | 0.90 | q01, q03, q42 = 1.00 |
+q03: repurchases row 68th → slot 2. Answer evidence 2/2.
+
+Consequences:
+- Which processing a question gets depends on its type. A regex guards this for now;
+  the question-type router (7-5) should own it.
+- q04 and q08 remain at 0.50: their causes are outside the net income and EPS bridges.
+
 ---
 
 ## 024 Bridge as a citable computed source, plus a code check for numbers
