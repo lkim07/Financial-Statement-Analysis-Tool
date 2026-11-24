@@ -2,7 +2,7 @@
 
 Usage:
     uv run --project backend --env-file .env python backend/rag/answer.py "Why did net income decrease?"
-    ... --k 5 --collection docs_v2_2 --doc amat-10k-fy2025
+    ... --k 5 --collection docs_v2_3 --doc amat-10k-fy2025
     ... --k 10 --route rule --decompose      # 라우터 + 브리지 분해 (decision 021, 023, 024)
 
 .env needs OPENAI_API_KEY and OPENAI_MODEL.
@@ -115,6 +115,20 @@ def gather_context(question: str, collection: str, k: int, embedder, milvus, doc
     return chunks, p
 
 
+def missing_docs(milvus, collection: str, registry: list[dict]) -> list[str]:
+    """레지스트리에는 있는데 컬렉션에는 청크가 하나도 없는 문서.
+
+    라우터가 그런 문서를 고르면 검색 결과가 0개가 되고, LLM은 "근거 없음"이라고 정직하게 답한다.
+    오류가 아니라 그럴듯한 답으로 보이기 때문에 미리 막는다 (Phase 7: docs_v2_2에는 프록시가 없었다).
+    """
+    missing = []
+    for d in registry:
+        rows = milvus.query(collection, filter=f'doc_id == "{d["doc_id"]}"', output_fields=["doc_id"], limit=1)
+        if not rows:
+            missing.append(d["doc_id"])
+    return missing
+
+
 def build_context(chunks: list[dict]) -> str:
     """청크마다 ID와 출처를 머리에 붙인다. LLM은 이 ID로 인용한다."""
     parts = [f"[{c['chunk_id']}] ({c['doc_label']}, page {c['page']}, {c['heading']})\n{c['text']}" for c in chunks]
@@ -169,7 +183,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("question")
     parser.add_argument("--k", type=int, default=5)
-    parser.add_argument("--collection", default="docs_v2_2")
+    parser.add_argument("--collection", default="docs_v2_3")
     parser.add_argument("--doc", action="append", help="limit to these doc_ids (repeatable)")
     parser.add_argument("--route", choices=["none", "rule", "cascade", "llm"], default="none",
                         help="pick documents from the question (cascade: rules, LLM only when unsure)")
@@ -182,6 +196,8 @@ def main() -> None:
     llm = OpenAI()  # OPENAI_API_KEY 환경 변수를 읽는다
 
     registry = load_docs()
+    if missing := missing_docs(milvus, args.collection, registry):
+        raise SystemExit(f"collection '{args.collection}' has no chunks for: {', '.join(missing)}")
     router_model = os.environ.get("ROUTER_MODEL") or os.environ["OPENAI_MODEL"]
     docs = args.doc or route_question(args.question, registry, args.route, llm, router_model)
     chunks, p = gather_context(args.question, args.collection, args.k, embedder, milvus, docs,

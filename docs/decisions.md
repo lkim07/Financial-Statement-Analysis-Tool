@@ -6,6 +6,33 @@ Only choices with real alternatives are recorded here.
 
 ---
 
+## 029 Fail fast when a collection lacks registered documents
+
+Date: 2026-11-24
+Status: accepted
+
+Context: The first Phase 7 answer run used the default collection `docs_v2_2`, which has no proxy chunks.
+The router sent q51–q56 to the proxy, retrieval returned nothing, and the model honestly answered
+"no evidence". There was no error, only six plausible wrong answers.
+
+Decision:
+- `answer.py` and `eval_answer.py` default to `docs_v2_3`.
+- Before running, check that every document in `data/sources.json` has at least one chunk in the
+  collection. Stop with the missing doc_ids otherwise.
+
+Results (Phase 7 final: docs_v2_3, k=10, cascade router, bridge decomposition, 58 questions):
+| status ok | citations | numbers | evidence hit | faithfulness |
+| 58/58 | 58/58 | 58/58 | 0.83 | 97% supported (72/74), 0 unsupported |
+
+Consequences:
+- The mistaken run stays in results_answer.md with a note.
+- Faithful is not the same as correct. q51 answered with the proxy's "total direct compensation"
+  ($29,481,370) instead of the Summary Compensation Table total ($29,649,352). It was judged supported
+  because the table states it. None of the current metrics checks the answer value itself.
+  Next: an answer-correctness check against golden `numbers`.
+
+---
+
 ## 028 Quotes must exist in a chunk, checked with the evaluator's normalization
 
 Date: 2026-11-24

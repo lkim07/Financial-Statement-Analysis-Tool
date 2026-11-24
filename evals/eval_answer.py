@@ -29,7 +29,7 @@ from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "rag"))
-from answer import gather_context, generate, validate  # noqa: E402
+from answer import gather_context, generate, missing_docs, validate  # noqa: E402
 from grounding import computed_source, expand_citations, ungrounded_numbers  # noqa: E402
 from router import load_docs  # noqa: E402
 from classify import route_question  # noqa: E402
@@ -53,6 +53,10 @@ def main(args) -> None:
     if args.only:
         golden = [q for q in golden if q["id"] in set(args.only)]
     registry = load_docs()
+    if missing := missing_docs(milvus, args.collection, registry):
+        # 라우터가 이 문서를 고르면 컨텍스트가 비고, 답은 "근거 없음"이 된다: 조용히 틀리지 말고 멈춘다
+        raise SystemExit(f"collection '{args.collection}' has no chunks for: {', '.join(missing)}. "
+                         f"Use a collection that indexes every document in data/sources.json.")
 
     records, status_ok, valid, numbers_ok, hit_scores = [], 0, 0, 0, []
     for q in golden:
@@ -147,7 +151,7 @@ def main(args) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Golden-set answer evaluation")
-    parser.add_argument("--collection", default="docs_v2_2")
+    parser.add_argument("--collection", default="docs_v2_3")
     parser.add_argument("--doc", action="append", help="search only these doc_ids (repeatable)")
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--route", choices=["none", "rule", "cascade", "llm"], default="none")
