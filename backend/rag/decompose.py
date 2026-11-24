@@ -65,7 +65,8 @@ def bridge_source(question: str, registry: list[dict]) -> tuple[str, int] | None
 
     연도가 없으면 최신 리포트의 최신 연도. Y년 리포트가 없으면 Y+1년 리포트의 비교 연도를 쓴다.
     """
-    by_year = {d["fiscal_year"]: d["doc_id"] for d in registry}
+    # 브리지는 재무제표에서 나온다: 10-K만 본다 (프록시도 fiscal_year 2025라 섞이면 덮어쓴다)
+    by_year = {d["fiscal_year"]: d["doc_id"] for d in registry if d.get("doc_type", "10-K") == "10-K"}
     years = [int(y) for y in YEAR.findall(question)]
     year = max(years) if years else max(by_year)
     if year in by_year:

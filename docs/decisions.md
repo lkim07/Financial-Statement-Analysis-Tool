@@ -4,6 +4,98 @@ Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
 
+---
+
+## 028 Quotes must exist in a chunk, checked with the evaluator's normalization
+
+Date: 2026-11-24
+Status: accepted
+
+Context: `--check-quotes` compares quotes with PyMuPDF page text. PyMuPDF reads tables column by column,
+LlamaParse row by row. A quote taken from PDF text ("29,649,352 27,799,212") passed validation but could
+never match a chunk, so q53 scored 0 while its chunk was in the top 10.
+
+Decision:
+- `validate.py --check-chunks`: every evidence item must match at least one chunk (original location or
+  an alternative), and every alternative must match a chunk.
+- The normalization lives in `evals/textnorm.py`, shared by the validator and the evaluator.
+- Skip documents without chunk files (CI has none).
+
+Consequences:
+- q53/q57 alternatives were rewritten as bare amounts (an 8-digit amount names one fact in the proxy).
+  The 0.86 → 0.88 change from this was a golden fix, not a system change (noted in results.md).
+- The first run also found a dead alternative in q21 (still to fix).
+- q44's quotes do match chunks, so its 0 is a real ranking problem, not a quote problem.
+
+---
+
+## 027 Cascade classifier: rules first, LLM only when the rules are unsure
+
+Date: 2026-11-24
+Status: accepted
+
+Context: Regex routing missed q54. Adding "KPMG" to the word list would fit the test, not the users.
+An LLM classifier understands new phrasings but costs tokens and about 2.7 s per call.
+
+Decision:
+- `classify.py` has three modes, each returning {doc_types, question_type, reason}.
+  - rule: also reports whether it is confident.
+  - llm: structured output.
+  - cascade: rules first; the LLM is called only when the rules are unsure.
+- The rules are unsure when neither proxy nor financial words match (a default guess),
+  or when both match (the expensive two-document path).
+- Document type: cascade. Question type: rules. Year selection: rules.
+
+Results (58 questions; question type scored on 52, unanswerable excluded):
+| mode | doc type | question type | LLM calls | tokens | time |
+| rule | 57/58 | 47/52 | 0 | 0 | 0 s |
+| llm | 58/58 | 46/52 | 58 | 24,331 | 157 s |
+| cascade | 58/58 | 47/52 | 16 | 6,738 | 41 s |
+End to end (retrieval, k=10): q54 0.00 → 1.00; evidence documents covered 52/52; quote recall 0.88 → 0.90.
+
+Consequences:
+- Question type has no single right label. All three modes disagree with the golden label on the same
+  two-intent questions (q40, q41, q45: "how much and why", "what and why").
+  The LLM also read "values for FY2025 and FY2024" as compare.
+  So judge the router by downstream scores, not by label accuracy. Today the type only gates bridge
+  decomposition, and none of the disagreements is a net income or EPS question.
+- 16 of 58 questions (28%) reach the LLM, mostly 10-K questions whose words are not in the financial
+  list (DSO, RD&E, risk). Widening the list from the 10-K's own section names would cut calls further.
+
+---
+
+## 026 Proxy statement added; router picks document type before year
+
+Date: 2026-11-24
+Status: accepted
+
+Context: The 2026 proxy (DEF 14A) covers fiscal 2025, the same `fiscal_year` as the FY2025 10-K.
+The router mapped years to documents with one dict ({fiscal_year: doc_id}). With two documents for
+2025, the later entry silently overwrote the earlier one: no error, wrong document.
+The bridge's report lookup had the same trap.
+
+Decision:
+- Register the proxy as `amat-def14a-2026` (doc_type "DEF 14A", fiscal_year 2025, no exhibits).
+  Index it in a new collection `docs_v2_3` (FY2025 10-K, FY2024 10-K, proxy: 1,008 chunks).
+  Keep `docs_v2_2` for comparison.
+- Route in two steps:
+  1. Document type: proxy words → DEF 14A; financial words → 10-K; both → both; neither → 10-K.
+  2. Year within each type: 10-K takes Y and Y+1; proxy takes Y.
+  Years are looked up per type. Bridges read 10-Ks only.
+- Golden q51–q58 (compensation, pay ratio, auditor fees, say-on-pay, nominees, one cross-document,
+  one unanswerable).
+- Evaluator labels documents K25 / K24 / PX26 (the fiscal year alone is ambiguous).
+
+Results (docs_v2_3, k=10, decompose):
+- The original 45 questions are unchanged line by line. The router never opens the proxy for them.
+  When the FY2024 10-K was added unfiltered in Phase 6, recall dropped 0.83 → 0.73.
+- Rule router: evidence documents covered 51/52. The miss is q54 ("fees paid to KPMG", no proxy word).
+
+Consequences:
+- Golden page numbers are PDF page indexes, not printed page numbers (the proxy is offset by 16).
+  The dashboard should show both.
+- The proxy repeats some figures (net income in Pay versus Performance) and reuses numbers with
+  different meanings (91% say-on-pay vs 91% of CEO pay in long-term awards). Both are tagged in golden.
 
 ---
 

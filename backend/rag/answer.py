@@ -19,7 +19,8 @@ from sentence_transformers import SentenceTransformer
 
 from decompose import merge_seats, plan
 from grounding import computed_source, ungrounded_numbers
-from router import load_docs, route_docs
+from classify import route_question
+from router import load_docs
 
 DB_PATH = "data/milvus.db"
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
@@ -170,7 +171,8 @@ def main() -> None:
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--collection", default="docs_v2_2")
     parser.add_argument("--doc", action="append", help="limit to these doc_ids (repeatable)")
-    parser.add_argument("--route", choices=["none", "rule"], default="none", help="pick documents from the question")
+    parser.add_argument("--route", choices=["none", "rule", "cascade", "llm"], default="none",
+                        help="pick documents from the question (cascade: rules, LLM only when unsure)")
     parser.add_argument("--decompose", action="store_true", help="bridge decomposition for net income questions")
     args = parser.parse_args()
 
@@ -180,7 +182,8 @@ def main() -> None:
     llm = OpenAI()  # OPENAI_API_KEY 환경 변수를 읽는다
 
     registry = load_docs()
-    docs = args.doc or (route_docs(args.question, registry) if args.route == "rule" else None)
+    router_model = os.environ.get("ROUTER_MODEL") or os.environ["OPENAI_MODEL"]
+    docs = args.doc or route_question(args.question, registry, args.route, llm, router_model)
     chunks, p = gather_context(args.question, args.collection, args.k, embedder, milvus, docs,
                                args.decompose, registry)
     if p:

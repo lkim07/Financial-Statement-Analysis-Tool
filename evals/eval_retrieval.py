@@ -26,30 +26,23 @@ from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "rag"))
-from router import load_docs, route_docs  # noqa: E402
+from router import load_docs  # noqa: E402
+from classify import route_question  # noqa: E402
 from decompose import merge_seats, plan  # noqa: E402
+from textnorm import norm  # noqa: E402
 
 DB_PATH = "data/milvus.db"
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 BGE_PREFIX = "Represent this sentence for searching relevant passages: "
 GOLDEN = Path("evals/golden.jsonl")
 FIELDS = ["page", "heading", "locations", "doc_id", "doc_label"]
+LLM = {"client": None, "model": None}  # --route cascade|llm 일 때만 채운다
 RESULTS = Path("evals/results.md")
 DEFAULT_DOC = "amat-10k-fy2025"  # doc이 없는 근거는 첫 문서(FY2025 10-K)의 것이다
 
 
 def doc_of(evidence: dict) -> str:
     return evidence.get("doc", DEFAULT_DOC)
-
-
-def norm(text: str) -> str:
-    """두 파서의 표기 차이를 지운다: 마크다운/HTML 기호, 표의 |, 특수 공백, '7 %' vs '7%'."""
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"[*#|]", " ", text)
-    text = text.replace("\\", " ")  # 마크다운 이스케이프(\*) 제거
-    text = text.replace("\xa0", " ")
-    text = re.sub(r"\s+%", "%", text)
-    return re.sub(r"\s+", " ", text).strip().lower()
 
 
 def hit_id(hit: dict) -> str:
@@ -82,10 +75,20 @@ def evaluate(args) -> None:
     vectors = model.encode(texts, normalize_embeddings=True)
 
     registry = load_docs()
+    # 출력용 짧은 이름: 10-K는 "K25", 프록시는 "PX26" (프록시도 fiscal_year가 2025라 연도만으로는 구분이 안 된다)
+    short = {d["doc_id"]: ("PX" + d["doc_id"][-2:] if d["doc_type"] == "DEF 14A" else f"K{d['fiscal_year'] % 100}")
+             for d in registry}
     decomposed_ids = set()
+    route_covered, route_extra = 0, 0  # 라우터 정확도: 정답 문서를 다 골랐나, 쓸데없는 문서는 몇 개인가
     page_scores, quote_scores, lines = [], [], []
     for q, vec in zip(questions, vectors):
         docs = question_docs(q, args, registry)
+        needed = {doc_of(o) for ev in q["evidence"] for o in [ev, *ev.get("alternatives", [])]}
+        if docs:
+            # 근거마다 원래 위치나 대안 중 하나의 문서만 골랐으면 된다
+            route_covered += all(any(doc_of(o) in docs for o in [ev, *ev.get("alternatives", [])])
+                                 for ev in q["evidence"])
+            route_extra += len(set(docs) - needed)
         # 순위 진단을 위해 상위 k개가 아니라 전체를 순서대로 받아 온다
         hits = client.search(
             args.collection,
@@ -145,8 +148,8 @@ def evaluate(args) -> None:
         page_scores.append(page_recall)
         quote_scores.append(quote_recall)
 
-        retrieved = ", ".join(f"{h['entity']['doc_label'][2:6]}:p{h['entity']['page']}" for h in top)
-        routed = ",".join(d[-4:] for d in docs) if docs else "all"
+        retrieved = ", ".join(f"{short[h['entity']['doc_id']]}:p{h['entity']['page']}" for h in top)
+        routed = ",".join(short[d] for d in docs) if docs else "all"
         if p:
             routed += " | decompose " + ",".join(d["item"] for d in p["drivers"])
         lines.append(f"{q['id']} [{q['type']}] docs {routed} | page {page_recall:.2f} | quote {quote_recall:.2f} | top{args.k}: {retrieved}")
@@ -160,6 +163,9 @@ def evaluate(args) -> None:
           f"  decompose={args.decompose}  n={len(questions)}")
     print(f"page recall@{args.k}:  {mean_page:.2f}")
     print(f"quote recall@{args.k}: {mean_quote:.2f}")
+    if args.route in ("rule", "cascade", "llm") and not args.doc:
+        print(f"router: evidence documents covered {route_covered}/{len(questions)}, "
+              f"extra documents searched {route_extra} (sum over questions)")
     if args.decompose:
         # 전체 평균은 분해 대상(몇 개 안 됨)의 변화를 희석한다: 대상만 따로 보여 준다
         sub = [qs for q, qs in zip(questions, quote_scores) if q["id"] in decomposed_ids]
@@ -177,13 +183,14 @@ def question_docs(q: dict, args, registry: list[dict]) -> list[str] | None:
     --route none   : 필터 없음 (모든 문서)
     --route oracle : 정답 근거가 있는 문서 (라우터가 완벽할 때의 상한선)
     --route rule   : 질문 텍스트만 보고 규칙으로 고름 (router.py)
+    --route cascade: 규칙이 확신하지 못할 때만 LLM이 문서 종류를 정함 (classify.py, decision 026)
     """
     if args.doc:
         return args.doc
     if args.route == "oracle":
         return sorted({doc_of(o) for ev in q["evidence"] for o in [ev, *ev.get("alternatives", [])]})
-    if args.route == "rule":
-        return route_docs(q["question"], registry)
+    if args.route in ("rule", "cascade", "llm"):
+        return route_question(q["question"], registry, args.route, LLM["client"], LLM["model"])
     return None
 
 
@@ -222,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--prefix", action="store_true", help="prepend the bge query instruction")
     parser.add_argument("--body-only", action="store_true", help="exclude exhibits")
     parser.add_argument("--doc", action="append", help="search only these doc_ids for every question (repeatable)")
-    parser.add_argument("--route", default="none", choices=["none", "oracle", "rule"],
+    parser.add_argument("--route", default="none", choices=["none", "oracle", "rule", "cascade", "llm"],
                         help="pick documents per question (ignored when --doc is given)")
     parser.add_argument("--decompose", action="store_true",
                         help="add bridge-driver queries for net-income-change questions; k = chunks passed on")
@@ -232,4 +239,10 @@ if __name__ == "__main__":
     parser.add_argument("--no-statement-seat", action="store_true",
                         help="do not add the income statement chunk the bridge used")
     parser.add_argument("--note", default="")
-    evaluate(parser.parse_args())
+    args = parser.parse_args()
+    if args.route in ("cascade", "llm"):
+        import os
+
+        from openai import OpenAI
+        LLM.update(client=OpenAI(), model=os.environ.get("ROUTER_MODEL") or os.environ.get("OPENAI_MODEL"))
+    evaluate(args)

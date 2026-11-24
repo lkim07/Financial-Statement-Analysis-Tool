@@ -24,5 +24,18 @@
     "source_url": "https://ir.appliedmaterials.com/static-files/3fe5f775-6637-4178-8ece-0934a6740020",
     "filing_url": "https://www.sec.gov/Archives/edgar/data/6951/000000695124000044/amat-20241027.htm",
     "sha256": "8909AFD7F0D66528E2B184929F7FE68B3A1A7385748757AC2BE7446FAEB9FC54"
+  },
+  {
+    "doc_id": "amat-def14a-2026",
+    "company": "Applied Materials",
+    "ticker": "AMAT",
+    "doc_type": "DEF 14A",
+    "fiscal_year": 2025,
+    "period_end": "2025-10-26",
+    "file": "amat_def14a_2026.pdf",
+    "exhibit_start_page": null,
+    "source_url": "https://ir.appliedmaterials.com/static-files/7f9e2aef-4ff1-43d5-a58a-b596e96c5250",
+    "filing_url": "https://www.sec.gov/Archives/edgar/data/6951/000119312526027307/d71992ddef14a.htm",
+    "sha256": "3977f38ccf576380bbba78d01b4f6cc99e3957861dfdc533436e6b0c321930c8"
   }
 ]

@@ -31,7 +31,8 @@ from sentence_transformers import SentenceTransformer
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend" / "rag"))
 from answer import gather_context, generate, validate  # noqa: E402
 from grounding import computed_source, expand_citations, ungrounded_numbers  # noqa: E402
-from router import load_docs, route_docs  # noqa: E402
+from router import load_docs  # noqa: E402
+from classify import route_question  # noqa: E402
 from eval_retrieval import DB_PATH, GOLDEN, doc_of, norm
 from eval_retrieval import MODEL_NAME as EMBED_MODEL_NAME  # noqa: E402
 
@@ -42,6 +43,7 @@ RESULTS = Path("evals/results_answer.md")
 def main(args) -> None:
     golden = [json.loads(line) for line in GOLDEN.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
     model_name = os.environ["OPENAI_MODEL"]
+    router_model = os.environ.get("ROUTER_MODEL") or model_name
 
     embedder = SentenceTransformer(EMBED_MODEL_NAME)
     milvus = MilvusClient(DB_PATH)
@@ -54,7 +56,7 @@ def main(args) -> None:
 
     records, status_ok, valid, numbers_ok, hit_scores = [], 0, 0, 0, []
     for q in golden:
-        docs = args.doc or (route_docs(q["question"], registry) if args.route == "rule" else None)
+        docs = args.doc or route_question(q["question"], registry, args.route, llm, router_model)
         chunks, p = gather_context(q["question"], args.collection, args.k, embedder, milvus, docs,
                                    args.decompose, registry)
         computed = computed_source(p) if p else None
@@ -148,7 +150,7 @@ if __name__ == "__main__":
     parser.add_argument("--collection", default="docs_v2_2")
     parser.add_argument("--doc", action="append", help="search only these doc_ids (repeatable)")
     parser.add_argument("--k", type=int, default=5)
-    parser.add_argument("--route", choices=["none", "rule"], default="none")
+    parser.add_argument("--route", choices=["none", "rule", "cascade", "llm"], default="none")
     parser.add_argument("--decompose", action="store_true")
     parser.add_argument("--only", nargs="+", help="question ids to run (e.g. --only q01 q42)")
     parser.add_argument("--note", default="")
