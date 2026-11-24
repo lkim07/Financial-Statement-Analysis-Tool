@@ -122,10 +122,55 @@ def check_quotes(rows: list[dict]) -> list[str]:
     return errors
 
 
+def check_chunk_quotes(rows: list[dict], parser: str = "llamaparse") -> list[str]:
+    """evidence의 quote가 그 문서의 청크 중 하나에 그대로 있는지 (평가와 같은 정규화로).
+
+    --check-quotes는 PDF 텍스트(PyMuPDF)와 대조한다. 그런데 표는 파서마다 읽는 순서가 다르다:
+    PyMuPDF는 열 단위로 "29,649,352 27,799,212"처럼 붙여 읽지만, LlamaParse는 행 단위라
+    두 숫자가 다른 행에 있다. PDF 검사를 통과해도 평가에서 영원히 못 찾는 quote가 생긴다 (q53).
+    청크 파일이 없는 문서는 건너뛴다 (CI에는 청크가 없다).
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from textnorm import norm
+
+    chunks_by_doc = {}
+
+    def chunks_of(doc_id: str) -> list[str] | None:
+        if doc_id not in chunks_by_doc:
+            path = Path("data/chunks") / doc_id / f"{parser}.jsonl"
+            chunks_by_doc[doc_id] = ([norm(json.loads(line)["text"]) for line in
+                                      path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+                                     if path.exists() else None)
+        return chunks_by_doc[doc_id]
+
+    errors = []
+    for row in rows:
+        for ev in row.get("evidence", []):
+            options = [ev, *ev.get("alternatives", [])]
+            found, checked = False, False
+            for opt in options:
+                chunks = chunks_of(opt.get("doc", DEFAULT_DOC))
+                if chunks is None:
+                    continue
+                checked = True
+                if any(norm(opt["quote"]) in c for c in chunks):
+                    found = True
+            if checked and not found:
+                errors.append(f"{row['id']}: 어느 청크에서도 찾지 못함 (원래 위치와 대안 모두) -> {ev['quote']!r}")
+            # 대안 하나하나도 확인: 찾을 수 없는 대안은 쓸모가 없다
+            for opt in ev.get("alternatives", []):
+                chunks = chunks_of(opt.get("doc", DEFAULT_DOC))
+                if chunks is not None and not any(norm(opt["quote"]) in c for c in chunks):
+                    errors.append(f"{row['id']}: 대안 quote가 청크에 없음 -> {opt['quote']!r}")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="golden.jsonl 검증")
     parser.add_argument("path", type=Path)
     parser.add_argument("--check-quotes", action="store_true", help="quote를 원본 PDF와 대조 (data/sources.json 사용)")
+    parser.add_argument("--check-chunks", action="store_true",
+                        help="quote가 청크(data/chunks/<doc>/llamaparse.jsonl)에 평가와 같은 정규화로 있는지 확인")
     args = parser.parse_args()
 
     rows, errors, seen_ids = [], [], set()
@@ -152,6 +197,8 @@ def main() -> int:
 
     if args.check_quotes:
         errors += check_quotes(rows)
+    if args.check_chunks:
+        errors += check_chunk_quotes(rows)
 
     if errors:
         print(f"문제 {len(errors)}개 발견:")

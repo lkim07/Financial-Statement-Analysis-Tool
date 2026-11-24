@@ -3,6 +3,256 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+
+---
+
+## 029 Fail fast when a collection lacks registered documents
+
+Date: 2026-11-24
+Status: accepted
+
+Context: The first Phase 7 answer run used the default collection `docs_v2_2`, which has no proxy chunks.
+The router sent q51–q56 to the proxy, retrieval returned nothing, and the model honestly answered
+"no evidence". There was no error, only six plausible wrong answers.
+
+Decision:
+- `answer.py` and `eval_answer.py` default to `docs_v2_3`.
+- Before running, check that every document in `data/sources.json` has at least one chunk in the
+  collection. Stop with the missing doc_ids otherwise.
+
+Results (Phase 7 final: docs_v2_3, k=10, cascade router, bridge decomposition, 58 questions):
+| status ok | citations | numbers | evidence hit | faithfulness |
+| 58/58 | 58/58 | 58/58 | 0.83 | 97% supported (72/74), 0 unsupported |
+
+Consequences:
+- The mistaken run stays in results_answer.md with a note.
+- Faithful is not the same as correct. q51 answered with the proxy's "total direct compensation"
+  ($29,481,370) instead of the Summary Compensation Table total ($29,649,352). It was judged supported
+  because the table states it. None of the current metrics checks the answer value itself.
+  Next: an answer-correctness check against golden `numbers`.
+
+---
+
+## 028 Quotes must exist in a chunk, checked with the evaluator's normalization
+
+Date: 2026-11-24
+Status: accepted
+
+Context: `--check-quotes` compares quotes with PyMuPDF page text. PyMuPDF reads tables column by column,
+LlamaParse row by row. A quote taken from PDF text ("29,649,352 27,799,212") passed validation but could
+never match a chunk, so q53 scored 0 while its chunk was in the top 10.
+
+Decision:
+- `validate.py --check-chunks`: every evidence item must match at least one chunk (original location or
+  an alternative), and every alternative must match a chunk.
+- The normalization lives in `evals/textnorm.py`, shared by the validator and the evaluator.
+- Skip documents without chunk files (CI has none).
+
+Consequences:
+- q53/q57 alternatives were rewritten as bare amounts (an 8-digit amount names one fact in the proxy).
+  The 0.86 → 0.88 change from this was a golden fix, not a system change (noted in results.md).
+- The first run also found a dead alternative in q21 (still to fix).
+- q44's quotes do match chunks, so its 0 is a real ranking problem, not a quote problem.
+
+---
+
+## 027 Cascade classifier: rules first, LLM only when the rules are unsure
+
+Date: 2026-11-24
+Status: accepted
+
+Context: Regex routing missed q54. Adding "KPMG" to the word list would fit the test, not the users.
+An LLM classifier understands new phrasings but costs tokens and about 2.7 s per call.
+
+Decision:
+- `classify.py` has three modes, each returning {doc_types, question_type, reason}.
+  - rule: also reports whether it is confident.
+  - llm: structured output.
+  - cascade: rules first; the LLM is called only when the rules are unsure.
+- The rules are unsure when neither proxy nor financial words match (a default guess),
+  or when both match (the expensive two-document path).
+- Document type: cascade. Question type: rules. Year selection: rules.
+
+Results (58 questions; question type scored on 52, unanswerable excluded):
+| mode | doc type | question type | LLM calls | tokens | time |
+| rule | 57/58 | 47/52 | 0 | 0 | 0 s |
+| llm | 58/58 | 46/52 | 58 | 24,331 | 157 s |
+| cascade | 58/58 | 47/52 | 16 | 6,738 | 41 s |
+End to end (retrieval, k=10): q54 0.00 → 1.00; evidence documents covered 52/52; quote recall 0.88 → 0.90.
+
+Consequences:
+- Question type has no single right label. All three modes disagree with the golden label on the same
+  two-intent questions (q40, q41, q45: "how much and why", "what and why").
+  The LLM also read "values for FY2025 and FY2024" as compare.
+  So judge the router by downstream scores, not by label accuracy. Today the type only gates bridge
+  decomposition, and none of the disagreements is a net income or EPS question.
+- 16 of 58 questions (28%) reach the LLM, mostly 10-K questions whose words are not in the financial
+  list (DSO, RD&E, risk). Widening the list from the 10-K's own section names would cut calls further.
+
+---
+
+## 026 Proxy statement added; router picks document type before year
+
+Date: 2026-11-24
+Status: accepted
+
+Context: The 2026 proxy (DEF 14A) covers fiscal 2025, the same `fiscal_year` as the FY2025 10-K.
+The router mapped years to documents with one dict ({fiscal_year: doc_id}). With two documents for
+2025, the later entry silently overwrote the earlier one: no error, wrong document.
+The bridge's report lookup had the same trap.
+
+Decision:
+- Register the proxy as `amat-def14a-2026` (doc_type "DEF 14A", fiscal_year 2025, no exhibits).
+  Index it in a new collection `docs_v2_3` (FY2025 10-K, FY2024 10-K, proxy: 1,008 chunks).
+  Keep `docs_v2_2` for comparison.
+- Route in two steps:
+  1. Document type: proxy words → DEF 14A; financial words → 10-K; both → both; neither → 10-K.
+  2. Year within each type: 10-K takes Y and Y+1; proxy takes Y.
+  Years are looked up per type. Bridges read 10-Ks only.
+- Golden q51–q58 (compensation, pay ratio, auditor fees, say-on-pay, nominees, one cross-document,
+  one unanswerable).
+- Evaluator labels documents K25 / K24 / PX26 (the fiscal year alone is ambiguous).
+
+Results (docs_v2_3, k=10, decompose):
+- The original 45 questions are unchanged line by line. The router never opens the proxy for them.
+  When the FY2024 10-K was added unfiltered in Phase 6, recall dropped 0.83 → 0.73.
+- Rule router: evidence documents covered 51/52. The miss is q54 ("fees paid to KPMG", no proxy word).
+
+Consequences:
+- Golden page numbers are PDF page indexes, not printed page numbers (the proxy is offset by 16).
+  The dashboard should show both.
+- The proxy repeats some figures (net income in Pay versus Performance) and reuses numbers with
+  different meanings (91% say-on-pay vs 91% of CEO pay in long-term awards). Both are tagged in golden.
+
+---
+
+## 025 EPS bridge (Shapley), cash flow facts, and decomposition only for "why" questions
+
+Date: 2026-11-23
+Status: accepted
+
+Context: q03 asks why diluted EPS rose while net income fell. The cause (share repurchases) is on the
+cash flow statement, ranked 68th by retrieval.
+
+Decision:
+- Extract 11 cash flow rows (by last label, nested sections).
+  Check that net income matches across the income and cash flow statements.
+- EPS bridge: change = net income effect + share count effect.
+  The split depends on order (the interaction term goes to whichever changes second),
+  so use the average of both orders (Shapley). FY2025: -0.218 / +0.273 (orders: -0.215/+0.270, -0.222/+0.277).
+  Allow 0.02 against reported EPS (cents and millions are rounded).
+- EPS "why" questions:
+  - fixed seats: income statement + cash flow chunks
+  - queries: share repurchases + the top net income driver
+  - computed source: `calc:eps:...`
+- Decomposition runs only for "why" questions. Applying it to q50 ("how much did EPS grow")
+  dropped it from 1.00 to 0.00: fixed seats pushed out the original answer.
+
+Results (k=10, rule router, 45 scored):
+| | quote recall | decomposed subset |
+| net income decomposition | 0.89 | q01, q42 = 1.00 |
+| + EPS, why-only | 0.90 | q01, q03, q42 = 1.00 |
+q03: repurchases row 68th → slot 2. Answer evidence 2/2.
+
+Consequences:
+- Which processing a question gets depends on its type. A regex guards this for now;
+  the question-type router (7-5) should own it.
+- q04 and q08 remain at 0.50: their causes are outside the net income and EPS bridges.
+
+---
+
+## 024 Bridge as a citable computed source, plus a code check for numbers
+
+Date: 2026-11-22
+Status: accepted
+
+Context: Bridge contributions (e.g. tax -1,298) appear in no report chunk, so an answer that cites
+them could not be verified. The judge would mark them unsupported, or the LLM would mark them inferred.
+
+Decision:
+- The bridge goes into the context as a COMPUTED source (`calc:bridge:<doc>:<year>`), generated by code.
+  It lists `source_chunks` (the income statement chunk), so citing it traces to report rows for highlighting.
+- Prompt: COMPUTED sources give amounts, not reasons. Reasons must cite report chunks.
+  Name offsetting contributors.
+- Judge: `calc:` numbers count as facts. Causes still need a report source.
+  Run records store the computed text.
+- Code check before the judge: every number in a non-inferred sentence must appear in its cited sources
+  (years and filing names like 10-K excluded).
+
+Results (50q, k=10, rule router):
+| | baseline | + bridge |
+| status ok | 50/50 | 50/50 |
+| q01 / q42 evidence | 1/4, 1/4 | 4/4, 4/4 |
+| faithfulness supported (bridge run) | – | 97% (65/67), 0 unsupported |
+| sentences citing calc: | – | 6/6 supported |
+| planted calc errors caught | – | 3/3, control 1/1 |
+
+Consequences:
+- The number check's first run flagged "10" from "10-K" in 6 answers: a bug in the check, not in the answers.
+  After the fix, no rounded or invented numbers.
+- Run-to-run noise: q29 and q38 changed with identical context. 1–2 question differences are within noise.
+- The judge's computed-source test has only 4 cases.
+
+---
+
+## 023 Bridge-driven query decomposition for net income questions
+
+Date: 2026-11-22
+Status: accepted (coverage 0.8 is an unvalidated default)
+
+Context: "Why did net income change" questions failed retrieval since Phase 3.
+The evidence uses different words (deferred tax remeasurement) than the question (net income),
+and k=10 alone did not help (the tax sentence stayed at rank 20).
+
+Decision: For net income change questions (not EPS):
+- Compute the bridge from the year-Y report (decision 022).
+- Pick drivers by cumulative |contribution| up to 80% (min 1, max 4).
+  The share uses the sum of |contributions|, not the net change, because drivers offset.
+- One report-style query per driver (HyDE), using only generic 10-K vocabulary.
+- Seats within a fixed budget k=10:
+  1. the income statement chunk the bridge used (fixed seat, no search)
+  2. the original question's top 4
+  3. each driver's top hit
+  4. round-robin fill
+
+Results (k=10, rule router, 45 scored; baseline re-run after adding alternatives):
+| setting | subset q01,q42 | all |
+| baseline k=10 | 0.25 | 0.86 |
+| v1: drivers first, no fixed seat | 0.38 | 0.86 |
+| v2: fixed seat + keep original 4 | 1.00 | 0.89 |
+
+Consequences:
+- v1 found the tax sentences but pushed out the original question's results; v2 fixed the seat order.
+- Numeric evidence comes from the facts table, not retrieval.
+- Same chunk budget as the baseline, so LLM cost is unchanged.
+- Limits: n=2; only net income questions; templates untested on other companies.
+
+---
+
+## 022 Financial numbers in a SQLite facts table, with arithmetic checks
+
+Date: 2026-11-18
+Status: accepted
+
+Context: "Why did profit change" needs exact numbers. LLMs read and add numbers unreliably,
+and retrieval cannot see that the tax line is the main driver of a net income change.
+
+Decision: Extract the income statement from LlamaParse table chunks into SQLite
+`facts(doc_id, statement, item, label, period, value, unit, page, chunk_id)` (long format).
+- `item` is a normalized key; `label` keeps the original wording.
+  Different labels for the same concept share a key
+  (FY2024 "Severance and related charges" and FY2025 "Restructuring charges" → `restructuring`).
+- Section label rows prefix the rows below them ("Earnings per share: Basic").
+- Five arithmetic checks (gross profit, total opex, operating income, pretax, net income),
+  tolerance 1 (USD millions).
+- `chunk_id` per number, so a number can be highlighted like a quote.
+
+Consequences:
+- The first FY2024 run failed one check (2022 total opex off by 4).
+  The cause was an unmapped label holding a reversal of (4). Checks catch mapping gaps, not just parse errors.
+- FY2024 net income is 7,177 in both reports (segments were recast, consolidated totals were not).
+- SQLite runs in CI; it can move to a managed DB in Phase 9.
+
 ---
 
 ## 021 Rule-based document router (year → report Y and Y+1, no year → latest)
