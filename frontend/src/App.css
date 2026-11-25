@@ -1,0 +1,45 @@
+.app { height: 100vh; display: flex; flex-direction: column; font-family: system-ui, sans-serif; color: #1f2328; }
+.app h1 { font-size: 1.1rem; margin: 0; padding: 12px 20px; border-bottom: 1px solid #e5e7eb; }
+main { flex: 1; display: grid; grid-template-columns: minmax(340px, 2fr) 3fr; min-height: 0; }
+
+.answer-panel { padding: 16px 20px; overflow-y: auto; border-right: 1px solid #e5e7eb; }
+.answer-panel form { display: flex; gap: 8px; align-items: flex-start; }
+.answer-panel textarea { flex: 1; font: inherit; padding: 8px; border: 1px solid #d0d7de; border-radius: 6px; resize: vertical; }
+button { font: inherit; cursor: pointer; }
+.answer-panel form button { padding: 8px 16px; border: 0; border-radius: 6px; background: #1f6feb; color: white; }
+.answer-panel form button:disabled { background: #8c959f; cursor: default; }
+
+.examples { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.examples button { text-align: left; font-size: 0.85rem; padding: 6px 10px; border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa; }
+
+.status { font-weight: 600; margin: 12px 0 4px; }
+.status-answered { color: #1a7f37; }
+.status-partial { color: #9a6700; }
+.status-no_evidence { color: #cf222e; }
+
+.answer ol { padding-left: 20px; }
+.sentence { margin-bottom: 12px; padding: 6px 8px; border-radius: 6px; cursor: pointer; line-height: 1.5; }
+.sentence:hover { background: #f6f8fa; }
+.sentence.inferred { border-left: 3px solid #8250df; }
+.tag { margin-left: 6px; font-size: 0.75rem; color: #8250df; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chip { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; border: 1px solid #d0d7de; background: white; }
+.chip-computed { border-color: #8250df; color: #8250df; }
+.chip.active { background: #fff8c5; border-color: #d4a72c; }
+
+.hint { color: #656d76; font-size: 0.85rem; }
+.error { color: #cf222e; font-size: 0.85rem; white-space: pre-wrap; }
+.missing { color: #9a6700; font-size: 0.85rem; }
+
+.pdf-viewer { display: flex; flex-direction: column; min-height: 0; background: #f6f8fa; }
+.pdf-viewer.empty { align-items: center; justify-content: center; color: #656d76; }
+.pdf-viewer header { display: flex; gap: 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; background: white; }
+.pdf-viewer header button { margin: 0 6px; border: 1px solid #d0d7de; background: white; border-radius: 4px; }
+.computed { margin: 8px 12px 0; padding: 8px; background: white; border: 1px solid #d8b9ff; border-radius: 6px; font-size: 0.78rem; white-space: pre-wrap; }
+.pdf-scroll { flex: 1; overflow: auto; padding: 12px; }
+.page-wrap { position: relative; width: fit-content; margin: 0 auto; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
+
+/* 하이라이트: 블록은 연하게, 숫자가 있는 행은 진하게 */
+.hl { position: absolute; pointer-events: none; border-radius: 2px; }
+.hl-block { background: rgba(255, 213, 79, 0.18); }
+.hl-exact { background: rgba(255, 152, 0, 0.35); outline: 1px solid rgba(230, 120, 0, 0.8); }
