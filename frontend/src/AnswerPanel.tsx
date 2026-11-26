@@ -62,6 +62,7 @@ export function AnswerPanel({ loading, error, answer, selected, onAsk, onSelect 
 
       {answer && !loading && (
         <div className="answer">
+          <p className="asked">Q: {answer.question}</p>
           <p className={`status status-${answer.status}`}>{STATUS_TEXT[answer.status]}</p>
           <ol>
             {answer.sentences.map((s, i) => (

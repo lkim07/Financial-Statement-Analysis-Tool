@@ -50,3 +50,4 @@
   - q57: cross-document; the net income evidence is ranked 32nd.
   - q44: ranking (15th and 13th). Its quotes do exist in the chunks.
 | 2026-11-24 | docs_v2_3 | 10 | False | True | 0.94 | 0.90 | 52 | cascade router [route: cascade] [decompose cov 0.8 dk 3 keep 4] |
+| 2026-11-26 | docs_v2_3 | 10 | False | True | 0.94 | 0.90 | 52 | textnorm: \$ spacing [route: cascade] [decompose cov 0.8 dk 3 keep 4] |

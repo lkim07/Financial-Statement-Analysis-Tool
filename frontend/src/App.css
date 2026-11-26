@@ -1,8 +1,17 @@
 .app { height: 100vh; display: flex; flex-direction: column; font-family: system-ui, sans-serif; color: #1f2328; }
-.app h1 { font-size: 1.1rem; margin: 0; padding: 12px 20px; border-bottom: 1px solid #e5e7eb; }
-main { flex: 1; display: grid; grid-template-columns: minmax(340px, 2fr) 3fr; min-height: 0; }
+.top { display: flex; align-items: center; gap: 24px; padding: 10px 20px; border-bottom: 1px solid #e5e7eb; }
+.top h1 { font-size: 1.1rem; margin: 0; }
+.top nav button { border: 0; background: none; padding: 6px 12px; border-radius: 6px; color: #656d76; }
+.top nav button.active { background: #ddf4ff; color: #0969da; }
+main { flex: 1; display: grid; min-height: 0; } /* 열 폭은 App.tsx가 정한다 (끌 수 있는 경계선) */
+.left { min-width: 0; min-height: 0; display: flex; }
+.left .panel { flex: 1; min-width: 0; display: flex; }
+.left .panel[hidden] { display: none; }
+.left .panel > section { flex: 1; min-width: 0; }
+.divider { cursor: col-resize; background: #e5e7eb; touch-action: none; }
+.divider:hover, .divider:focus-visible { background: #1f6feb; outline: none; }
 
-.answer-panel { padding: 16px 20px; overflow-y: auto; border-right: 1px solid #e5e7eb; }
+.answer-panel { padding: 16px 20px; overflow-y: auto; }
 .answer-panel form { display: flex; gap: 8px; align-items: flex-start; }
 .answer-panel textarea { flex: 1; font: inherit; padding: 8px; border: 1px solid #d0d7de; border-radius: 6px; resize: vertical; }
 button { font: inherit; cursor: pointer; }
@@ -31,15 +40,48 @@ button { font: inherit; cursor: pointer; }
 .error { color: #cf222e; font-size: 0.85rem; white-space: pre-wrap; }
 .missing { color: #9a6700; font-size: 0.85rem; }
 
-.pdf-viewer { display: flex; flex-direction: column; min-height: 0; background: #f6f8fa; }
-.pdf-viewer.empty { align-items: center; justify-content: center; color: #656d76; }
+.pdf-viewer { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #f6f8fa; }
+.pdf-viewer .empty { text-align: center; margin-top: 40%; }
+.zoom { display: inline-flex; align-items: center; }
 .pdf-viewer header { display: flex; gap: 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; background: white; }
 .pdf-viewer header button { margin: 0 6px; border: 1px solid #d0d7de; background: white; border-radius: 4px; }
 .computed { margin: 8px 12px 0; padding: 8px; background: white; border: 1px solid #d8b9ff; border-radius: 6px; font-size: 0.78rem; white-space: pre-wrap; }
-.pdf-scroll { flex: 1; overflow: auto; padding: 12px; }
+/* scrollbar-gutter: 스크롤바 자리를 늘 비워 둔다. 스크롤바가 생겼다 없어지며 폭이 흔들리는 걸 막는다 */
+.pdf-scroll { flex: 1; overflow: auto; padding: 12px; scrollbar-gutter: stable; }
 .page-wrap { position: relative; width: fit-content; margin: 0 auto; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
+/* 새 페이지는 보이지 않게 그리다가, 다 그려지면 보이는 페이지와 바꿔 끼운다 */
+.page-pending { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; }
 
 /* 하이라이트: 블록은 연하게, 숫자가 있는 행은 진하게 */
 .hl { position: absolute; pointer-events: none; border-radius: 2px; }
 .hl-block { background: rgba(255, 213, 79, 0.18); }
 .hl-exact { background: rgba(255, 152, 0, 0.35); outline: 1px solid rgba(230, 120, 0, 0.8); }
+
+.asked { color: #656d76; font-size: 0.9rem; margin: 12px 0 0; }
+
+.dashboard { padding: 16px 20px; overflow-y: auto; }
+.dash-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.dash-head select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid #d0d7de; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f6f8fa; }
+.kpi:hover { border-color: #d4a72c; }
+.kpi-name { font-size: 0.78rem; color: #656d76; }
+.kpi-value { font-size: 1.25rem; font-weight: 600; }
+.kpi-change { font-size: 0.8rem; }
+.kpi-change.up { color: #1a7f37; }
+.kpi-change.down { color: #cf222e; }
+.dashboard h2 { font-size: 1rem; margin: 20px 0 4px; }
+
+.waterfall { width: 100%; height: auto; }
+.waterfall .grid { stroke: rgba(136, 135, 128, 0.25); }
+.waterfall .tick { font-size: 11px; fill: #656d76; }
+.waterfall .value { font-size: 11px; fill: #1f2328; }
+.waterfall .axis-note { font-size: 11px; fill: #9a6700; }
+.waterfall .connector { stroke: #8c959f; stroke-dasharray: 3 3; }
+.waterfall .bar { cursor: pointer; }
+.waterfall .bar:hover rect, .waterfall .bar.selected rect { stroke: #d4a72c; stroke-width: 2; }
+.legend { font-size: 0.8rem; color: #656d76; display: flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 8px; }
+.sw.total { background: #888780; } .sw.up { background: #2a78d6; } .sw.down { background: #e34948; }
+.bar-detail { margin-top: 8px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.bar-detail button { padding: 4px 10px; border: 1px solid #1f6feb; color: #1f6feb; background: white; border-radius: 6px; }

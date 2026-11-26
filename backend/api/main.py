@@ -6,6 +6,7 @@
     GET  /health              서버와 컬렉션 상태
     GET  /docs/list           등록된 문서 목록 (/docs는 FastAPI의 API 문서 페이지라 피했다)
     GET  /docs/{doc_id}/pdf   PDF 파일 (뷰어가 연다)
+    GET  /reports/{doc_id}/summary   핵심 지표 + 순이익 워터폴 (숫자 테이블, LLM 없음)
     POST /ask                 질문 -> 답변 + 출처 + 하이라이트
 """
 
@@ -21,7 +22,7 @@ from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(Path(__file__).resolve().parent), str(ROOT / "rag"), str(ROOT / "ingest"), str(ROOT / "numbers")]
-from service import Deps, ask  # noqa: E402
+from service import Deps, ask, report_summary  # noqa: E402
 
 COLLECTION = os.environ.get("COLLECTION", "docs_v2_3")
 STATE: dict = {}
@@ -55,7 +56,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Evidence-Based Financial Report Analyst", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://localhost:5173"],
+                   allow_methods=["*"], allow_headers=["*"])
 
 
 class AskRequest(BaseModel):
@@ -85,6 +87,19 @@ def get_pdf(doc_id: str):
     if doc is None:
         raise HTTPException(404, f"unknown document: {doc_id}")
     return FileResponse(pdf_path(doc), media_type="application/pdf")
+
+
+@app.get("/reports/{doc_id}/summary")
+def get_summary(doc_id: str):
+    doc = next((d for d in STATE["deps"].registry if d["doc_id"] == doc_id), None)
+    if doc is None:
+        raise HTTPException(404, f"unknown document: {doc_id}")
+    if doc["doc_type"] != "10-K":
+        raise HTTPException(400, "summaries need financial statements (10-K only)")
+    try:
+        return report_summary(doc_id, STATE["deps"])
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
 
 
 @app.post("/ask")
