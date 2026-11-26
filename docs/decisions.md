@@ -3,6 +3,74 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+---
+
+## 032 CI installs light test dependencies
+
+Date: 2026-11-26
+Status: accepted (extends 018)
+
+Context: CI installed only pytest. `classify.py` (Phase 7) imports pydantic, so test collection failed
+on the last two pushes. API and highlight tests were silently skipped (`importorskip`).
+
+Decision: CI installs pytest, pydantic, fastapi, httpx, pymupdf. Still no embedding model, Milvus,
+OpenAI or PDFs. Verified by running the suite in a fresh virtual environment with only these packages.
+
+Consequences: 81 tests run in CI, including API endpoints and highlight geometry on a generated PDF.
+A new third-party import in tested code must be added to CI in the same PR.
+
+---
+
+## 031 Viewer and dashboard UX: no flicker, no lost state, resizable panes
+
+Date: 2026-11-26
+Status: accepted
+
+Context: First user test of the dashboard. Clicking waterfall bars made the PDF flicker several times
+before settling. Switching tabs reset the dashboard. The left pane's width was fixed.
+
+Decision:
+- Double-buffered PDF pages: a new page or width renders hidden and is swapped in on `onRenderSuccess`.
+  The previous page stays visible meanwhile. Highlight-only changes on the same page do not re-render.
+- Break the resize feedback loop (scrollbar appears → narrower → re-render → scrollbar disappears …):
+  `scrollbar-gutter: stable`, width in 8 px steps, applied 150 ms after resizing stops.
+- Tabs are hidden, not unmounted. Summaries are cached per document. The selected bar is remembered
+  by a document-independent key (e.g. `tax_provision`), so switching FY2025 ↔ FY2024 highlights the
+  same item's row in each report.
+- Draggable divider (pointer capture, ←/→ keys), saved in localStorage. Zoom 75–200%.
+
+Consequences:
+- Comparing one driver across years is now one click. This came from the user, not the original plan.
+- The dashboard is 10-K only. Uploads and company workspaces move to Phase 9.
+
+---
+
+## 030 API returns highlight boxes; React viewer draws them over react-pdf
+
+Date: 2026-11-25
+Status: accepted
+
+Context: The product promise is "click an answer sentence, see the evidence in the PDF".
+Chunks already store block boxes (Phase 2). Text search in the rendered PDF would not match LlamaParse
+markdown text.
+
+Decision:
+- FastAPI `POST /ask` returns sentences, citations, and one entry per cited source with highlights.
+  Models load once at startup.
+- Two highlight levels:
+  - block: the chunk's boxes, light
+  - exact: numbers from the citing sentences, searched only inside the chunk's blocks with
+    PyMuPDF `search_for`, then widened to the table row, dark
+  Computed sources highlight the statement rows behind their "A -> B" values.
+  Contributions and years are never searched.
+- Coordinates stay in PDF points with a top-left origin (PyMuPDF).
+  The viewer scales by rendered width (px) / original page width (pt, from react-pdf `onLoadSuccess`).
+- Frontend: Vite + React + TypeScript + react-pdf, no SSR (pdf.js is browser-only).
+
+Consequences:
+- First check on q01: the bridge source highlighted 9 rows on p47. The first version also lit the table
+  header because "fiscal 2024 -> 2025" looked like a value pair; fixed and tested.
+- Numbers the PDF does not contain (e.g. a computed +$422 change) highlight nothing, by design.
 
 ---
 
@@ -53,7 +121,11 @@ Consequences:
   The 0.86 → 0.88 change from this was a golden fix, not a system change (noted in results.md).
 - The first run also found a dead alternative in q21 (still to fix).
 - q44's quotes do match chunks, so its 0 is a real ranking problem, not a quote problem.
-
+- 2026-11-26: also normalize "$ 507" vs "$507" (q21's alternative never matched LlamaParse tables).
+- 2026-11-26: also normalize "$ 507" vs "$507" (harmless, kept). q21's dead alternative was a
+  different cause: a segment table parsed as text in column order, so the row never appears
+  contiguously. Rewritten as a bare amount, like q53/q57.
+  
 ---
 
 ## 027 Cascade classifier: rules first, LLM only when the rules are unsure

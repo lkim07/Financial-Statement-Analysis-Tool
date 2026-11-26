@@ -17,8 +17,10 @@ jobs:
         with:
           python-version: "3.13"
 
+      # 가벼운 패키지만: 구조화 출력 스키마(pydantic), API 테스트(fastapi, httpx), 하이라이트 좌표(pymupdf).
+      # 임베딩 모델(torch), Milvus, OpenAI 호출은 여전히 CI에서 돌리지 않는다 (decision 018, 031).
       - name: Install test tools
-        run: pip install pytest
+        run: pip install pytest pydantic fastapi httpx pymupdf
 
       - name: Validate golden set (structure only, no PDF)
         run: python evals/validate.py evals/golden.jsonl
