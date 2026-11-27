@@ -51,3 +51,5 @@
   - q44: ranking (15th and 13th). Its quotes do exist in the chunks.
 | 2026-11-24 | docs_v2_3 | 10 | False | True | 0.94 | 0.90 | 52 | cascade router [route: cascade] [decompose cov 0.8 dk 3 keep 4] |
 | 2026-11-26 | docs_v2_3 | 10 | False | True | 0.94 | 0.90 | 52 | textnorm: \$ spacing [route: cascade] [decompose cov 0.8 dk 3 keep 4] |
+| 2026-11-27 | docs_v3 | 10 | False | True | 0.94 | 0.90 | 52 | docs_v3: company_id field [route: cascade] [decompose cov 0.8 dk 3 keep 4] |
+docs_v3 = docs_v2_3 (Same 0.90, top10): adding company_id does not affect to search

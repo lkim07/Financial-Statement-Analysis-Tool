@@ -3,6 +3,32 @@
 Newest first. Each entry: context, decision, consequences.
 Only choices with real alternatives are recorded here.
 
+
+---
+
+## 033 Registry in SQLite; company is a hard filter
+
+Date: 2026-11-27
+Status: accepted (extends 019)
+
+Context: Phase 9 adds uploads into per-company folders. The registry (data/sources.json) would be
+rewritten by the server while it runs: two uploads finishing together can lose one entry, and a crash
+mid-write corrupts the file. Answers in one company's folder must never use another company's chunks.
+
+Decision:
+- `data/app.db` (SQLite) with `companies` and `documents(status, error, UNIQUE(company_id, sha256))`.
+  Each change is one row in a transaction. `data/sources.json` stays as the committed seed.
+- Same file in the same folder returns the existing document (no second parse). Same doc_id with a
+  different file is an error, never silently accepted.
+- Only `ready` documents are visible to the router and the dashboard.
+- Every chunk stores `company_id`, taken from the registry at index time. Retrieval always adds
+  `company_id == X` in code, independent of the router (which may be an LLM). The router also only
+  sees that company's documents. Company ids are validated before going into the filter expression.
+- New collection `docs_v3`; `docs_v2_3` kept for rollback and comparison.
+
+Consequences: existing modules read the same dict shape and did not change. The facts table keeps
+doc_id only; company comes from a join, so the fact is stored once.
+
 ---
 
 ## 032 CI installs light test dependencies

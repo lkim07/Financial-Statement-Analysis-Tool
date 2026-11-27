@@ -151,7 +151,7 @@ def main(args) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Golden-set answer evaluation")
-    parser.add_argument("--collection", default="docs_v2_3")
+    parser.add_argument("--collection", default="docs_v3")
     parser.add_argument("--doc", action="append", help="search only these doc_ids (repeatable)")
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--route", choices=["none", "rule", "cascade", "llm"], default="none")

@@ -14,6 +14,8 @@ from pathlib import Path
 from pymilvus import DataType, MilvusClient
 from sentence_transformers import SentenceTransformer
 
+from registry import get_doc
+
 DB_PATH = "data/milvus.db"  # 파일 경로 = Milvus Lite. 나중에 서버 주소로 바꾸면 그대로 Milvus/Zilliz로 간다
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 DIM = 384  # 이 모델의 벡터 차원
@@ -33,6 +35,7 @@ def create_collection(client: MilvusClient, name: str) -> None:
     # 스키마: 어떤 필드를 어떤 타입으로 저장할지 미리 정한다 (SQL의 CREATE TABLE과 비슷)
     schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=False)
     schema.add_field("chunk_id", DataType.VARCHAR, is_primary=True, max_length=64)  # 'amat-10k-fy2025:c0123'
+    schema.add_field("company_id", DataType.VARCHAR, max_length=32)  # 필터: 회사 경계 (decision 033)
     schema.add_field("doc_id", DataType.VARCHAR, max_length=64)  # 필터: 특정 문서만
     schema.add_field("doc_label", DataType.VARCHAR, max_length=32)  # 인용 표시: 'FY2025 10-K'
     schema.add_field("doc_type", DataType.VARCHAR, max_length=16)  # 필터: 10-K / DEF 14A / 8-K
@@ -72,9 +75,13 @@ def main(collection: str, chunk_files: list[Path]) -> None:
     client = MilvusClient(DB_PATH)
     create_collection(client, collection)
 
+    # 회사는 청크 파일이 아니라 레지스트리에서 가져온다: 사실의 출처는 한 곳이어야 한다.
+    # 그래서 예전에 만든 청크 파일도 다시 청킹하지 않고 그대로 쓸 수 있다
+    company_of = {d: get_doc(d)["company_id"] for d in {c["doc_id"] for c in chunks}}
     rows = [
         {
             "chunk_id": c["chunk_id"],
+            "company_id": company_of[c["doc_id"]],
             "doc_id": c["doc_id"],
             "doc_label": c["doc_label"],
             "doc_type": c["doc_type"],

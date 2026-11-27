@@ -2,7 +2,7 @@
 
 Usage:
     uv run --project backend --env-file .env python backend/rag/answer.py "Why did net income decrease?"
-    ... --k 5 --collection docs_v2_3 --doc amat-10k-fy2025
+    ... --k 5 --collection docs_v3 --doc amat-10k-fy2025
     ... --k 10 --route rule --decompose      # 라우터 + 브리지 분해 (decision 021, 023, 024)
 
 .env needs OPENAI_API_KEY and OPENAI_MODEL.
@@ -20,6 +20,7 @@ from sentence_transformers import SentenceTransformer
 from decompose import merge_seats, plan
 from grounding import computed_source, ungrounded_numbers
 from classify import route_question
+from filters import build_filter
 from router import load_docs
 
 DB_PATH = "data/milvus.db"
@@ -72,40 +73,34 @@ Rules:
 
 # ---------- 2. 검색 ----------
 
-def build_filter(docs: list[str] | None = None) -> str:
-    """기본은 본문만 (decision 014). docs를 주면 그 문서들만 (decision 019)."""
-    expr = 'section == "body"'
-    if docs:
-        expr += " and doc_id in [" + ", ".join(f'"{d}"' for d in docs) + "]"
-    return expr
-
-
-def retrieve(question: str, collection: str, k: int, embedder, milvus, docs: list[str] | None = None) -> list[dict]:
+def retrieve(question: str, collection: str, k: int, embedder, milvus, docs: list[str] | None = None,
+             company: str | None = None) -> list[dict]:
     vec = embedder.encode([question], normalize_embeddings=True)
     hits = milvus.search(
         collection,
         data=vec.tolist(),
         limit=k,
         output_fields=["text", "page", "heading", "locations", "doc_id", "doc_label"],
-        filter=build_filter(docs),
+        filter=build_filter(docs, company),
     )[0]
     return [{"chunk_id": h.get("id", h.get("chunk_id")), **h["entity"]} for h in hits]
 
 
 def gather_context(question: str, collection: str, k: int, embedder, milvus, docs: list[str] | None = None,
                    decompose: bool = False, registry: list[dict] | None = None, coverage: float = 0.8,
-                   driver_k: int = 3, keep_original: int = 4) -> tuple[list[dict], dict | None]:
+                   driver_k: int = 3, keep_original: int = 4,
+                   company: str | None = None) -> tuple[list[dict], dict | None]:
     """LLM에 넘길 청크 k개 (+ 분해했다면 브리지 계산 결과 하나).
 
     분해 대상이 아니면 retrieve()와 같다. 분해 대상이면 decision 023의 자리 배정을 따른다.
     """
     p = plan(question, registry or load_docs(), coverage) if decompose else None
     if not p:
-        return retrieve(question, collection, k, embedder, milvus, docs), None
+        return retrieve(question, collection, k, embedder, milvus, docs, company), None
 
     vecs = embedder.encode([question] + [d["query"] for d in p["drivers"]], normalize_embeddings=True)
     searches = [milvus.search(collection, data=[v.tolist()], limit=k if i == 0 else driver_k,
-                              output_fields=FIELDS, filter=build_filter(docs))[0]
+                              output_fields=FIELDS, filter=build_filter(docs, company))[0]
                 for i, v in enumerate(vecs)]
     fixed = [{"id": r["chunk_id"], "entity": r}
              for r in milvus.get(collection, ids=p["statement_chunks"], output_fields=FIELDS)]
@@ -183,7 +178,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("question")
     parser.add_argument("--k", type=int, default=5)
-    parser.add_argument("--collection", default="docs_v2_3")
+    parser.add_argument("--collection", default="docs_v3")
     parser.add_argument("--doc", action="append", help="limit to these doc_ids (repeatable)")
     parser.add_argument("--route", choices=["none", "rule", "cascade", "llm"], default="none",
                         help="pick documents from the question (cascade: rules, LLM only when unsure)")

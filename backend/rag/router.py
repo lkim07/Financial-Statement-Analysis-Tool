@@ -17,11 +17,13 @@ Years are looked up per type: a 10-K and a proxy can both cover fiscal 2025,
 and one dict keyed by year would silently keep only one of them.
 """
 
-import json
 import re
+import sys
 from pathlib import Path
 
-SOURCES = Path("data/sources.json")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
+from registry import load_sources  # noqa: E402
+
 TEN_K, PROXY = "10-K", "DEF 14A"
 
 EXPLICIT_DOC = re.compile(r"\b(?:fy\s?)?(20\d{2})\s+10-?k\b")
@@ -42,8 +44,9 @@ FINANCIAL_WORDS = re.compile(
 )
 
 
-def load_docs() -> list[dict]:
-    return json.loads(SOURCES.read_text(encoding="utf-8-sig"))
+def load_docs(company_id: str | None = None) -> list[dict]:
+    """라우터가 고를 수 있는 문서: ready 문서만, company_id를 주면 그 회사 것만 (decision 033)."""
+    return load_sources(company_id)
 
 
 def doc_types(question: str) -> list[str]:
