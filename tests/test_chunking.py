@@ -55,3 +55,20 @@ def test_split_table_repeats_header_and_section_label():
 
 def test_small_table_is_not_split():
     assert split_table(compact_table(TABLE), limit=1000, count=count) == [compact_table(TABLE)]
+
+
+def test_overlong_heading_is_kept_as_text():
+    """Lam 10-K: 파서가 672자짜리 문단을 제목으로 분류했다. 제목으로 쓰면 내용이 청크에서 사라진다."""
+    from chunk import MAX_HEADING, make_chunks
+
+    long_para = "Our results depend on " + "customer investment in wafer fabrication equipment " * 12
+    assert len(long_para) > MAX_HEADING
+    pages = [{"page": 5, "width": 612, "height": 792, "blocks": [
+        {"id": "p005_i000", "type": "heading", "bbox": [0, 0, 1, 1], "text": "# Risk Factors"},
+        {"id": "p005_i001", "type": "heading", "bbox": [0, 2, 1, 3], "text": f"**{long_para}**"},
+    ]}]
+    doc = {"doc_id": "lrcx-10k-fy2025", "company": "Lam Research", "fiscal_year": 2025, "doc_type": "10-K"}
+    chunks = make_chunks(pages, count, doc)
+    assert len(chunks) == 1
+    assert chunks[0]["heading"] == "Risk Factors"  # 진짜 제목은 그대로
+    assert "wafer fabrication equipment" in chunks[0]["text"]  # 내용이 살아 있다

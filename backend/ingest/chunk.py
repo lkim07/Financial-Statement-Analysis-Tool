@@ -30,6 +30,7 @@ EMBED_LIMIT = 500  # embed_text(머리글 포함) 한도. 모델이 붙이는 �
 MERGE_TARGET = 400  # 짧은 블록을 합칠 때 본문(text)의 목표 크기
 MIN_TOKENS = 20  # 본문이 이보다 짧으면 "너무 짧음"으로 보고한다
 SKIP_TYPES = {"header", "footer"}  # 노이즈 필터를 빠져나온 머리글/바닥글
+MAX_HEADING = 200  # 글자 수. 이보다 긴 "제목"은 실제로는 문단이다 (Phase 9: Lam 10-K에 672자짜리가 있었다)
 BOILERPLATE = ("See accompanying Notes",)  # 재무제표 아래마다 반복되는 문구
 CAPTION_MAX_TOKENS = 40  # 표 바로 앞의 짧은 설명문만 캡션으로 본다
 
@@ -154,6 +155,10 @@ class Chunker:
 
         if block_type in SKIP_TYPES or block["text"].startswith(BOILERPLATE):
             return
+        if block_type == "heading" and len(clean_heading(block["text"])) > MAX_HEADING:
+            # 파서가 굵은 글씨 문단을 제목으로 잘못 분류한 것. 제목으로 쓰면 내용이 청크에서 빠진다 
+            block = {**block, "type": "text"}
+            block_type = "text"
         if block_type == "heading":
             self.flush()  # 제목이 바뀌면 그 전까지 모은 것은 이전 제목 아래 청크다
             self.heading = clean_heading(block["text"])
@@ -327,6 +332,22 @@ def save_jsonl(chunks: list[dict], path: Path) -> None:
         for c in chunks:
             f.write(json.dumps(c, ensure_ascii=False) + "\n")
     print(f"\nsaved {len(chunks)} chunks -> {path}")
+
+
+def chunk_document(doc: dict, tokenizer, parser: str = "llamaparse") -> list[dict]:
+    """파싱된 페이지 -> 청크 파일. 업로드 파이프라인과 CLI가 같이 쓴다."""
+    pages = [json.loads(p.read_text(encoding="utf-8"))
+             for p in sorted(parsed_dir(doc, parser).glob("page_*.json"))]
+    if not pages:
+        raise RuntimeError(f"no parsed pages in {parsed_dir(doc, parser)}")
+
+    def count_tokens(text: str) -> int:
+        # 특수 토큰([CLS], [SEP])은 빼고 센다. EMBED_LIMIT에 그 자리를 남겨 두었다
+        return len(tokenizer.encode(text, add_special_tokens=False))
+
+    chunks = make_chunks(pages, count_tokens, doc)
+    save_jsonl(chunks, chunks_path(doc, parser))
+    return chunks
 
 
 if __name__ == "__main__":

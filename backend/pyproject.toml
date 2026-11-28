@@ -14,6 +14,7 @@ dependencies = [
     "openai>=3.49.0",
     "pymilvus[milvus-lite]>=3.0.3",
     "pymupdf>=2.1",
+    "python-multipart>=0.0.34",
     "sentence-transformers>=6.2.0",
     "uvicorn>=0.54.0",
 ]

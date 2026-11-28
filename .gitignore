@@ -9,3 +9,5 @@ Thumbs.db
 !data/sources.json
 evals/runs/
 data/app.db
+data/uploads/
+data/cache/

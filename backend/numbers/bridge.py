@@ -22,12 +22,15 @@ NET_INCOME_BRIDGE = [
     (-1, "rd_e"),
     (-1, "marketing_selling"),
     (-1, "general_admin"),
+    (-1, "sg_a"),  # 판관비를 한 줄로 적는 회사 (Lam). AMAT는 위의 두 줄
     (-1, "restructuring"),
     (-1, "interest_expense"),
     (+1, "other_income_net"),
     (-1, "tax_provision"),
 ]
-OPTIONAL = {"restructuring"}  # 행이 없는 해에는 0
+# 행이 없는 해(또는 그런 행이 없는 회사)에는 0. 두 해 모두 없으면 막대를 만들지 않는다.
+# 빠뜨려도 안전한 이유: 아래에서 기여도의 합이 순이익 변화와 같은지 검사한다
+OPTIONAL = {"restructuring", "marketing_selling", "general_admin", "sg_a", "interest_expense"}
 
 
 def load_facts(doc_id: str, db_path: Path = DB_PATH) -> list[dict]:
@@ -58,6 +61,8 @@ def net_income_bridge(facts: list[dict], year: int | None = None) -> dict:
 
     drivers = []
     for sign, item in NET_INCOME_BRIDGE:
+        if item in OPTIONAL and (item, year) not in by_key and (item, prev) not in by_key:
+            continue
         current, before = value(item, year), value(item, prev)
         fact = by_key.get((item, year)) or by_key.get((item, prev))
         drivers.append({
@@ -153,9 +158,11 @@ def report_differences(facts_a: list[dict], facts_b: list[dict]) -> list[str]:
 def show(bridge: dict) -> None:
     print(f"\n{bridge['doc_id']}: net income {bridge['prior_year']} {bridge['net_income_prior']:,.0f}"
           f" -> {bridge['year']} {bridge['net_income']:,.0f}  ({bridge['change']:+,.0f})")
+    # 막대 길이는 가장 큰 기여도 = 40칸 기준. 단위(백만/천 달러)와 상관없이 같은 모양이 된다
+    biggest = max((abs(d["contribution"]) for d in bridge["drivers"]), default=0) or 1
     for d in bridge["drivers"]:
-        bar = "+" * round(abs(d["contribution"]) / 100) if d["contribution"] > 0 else "-" * round(abs(d["contribution"]) / 100)
-        print(f"  {d['contribution']:+8,.0f}  {d['item']:<20} {d['prior']:>9,.0f} -> {d['current']:>9,.0f}"
+        bar = ("+" if d["contribution"] > 0 else "-") * round(abs(d["contribution"]) / biggest * 40)
+        print(f"  {d['contribution']:+12,.0f}  {d['item']:<20} {d['prior']:>12,.0f} -> {d['current']:>12,.0f}"
               f"  p{d['page']}  {bar}")
 
 

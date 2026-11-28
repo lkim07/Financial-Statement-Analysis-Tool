@@ -43,16 +43,32 @@ CREATE TABLE IF NOT EXISTS documents (
     source_url         TEXT NOT NULL DEFAULT '',
     filing_url         TEXT NOT NULL DEFAULT '',
     status             TEXT NOT NULL,
-    error              TEXT,
+    error              TEXT,                -- failed: 왜 실패했나
+    warning            TEXT,                -- ready지만 확인이 필요한 것 (숫자 검산 실패, 폴더와 표지의 회사가 다름)
     created_at         TEXT NOT NULL,
     updated_at         TEXT NOT NULL,
     UNIQUE (company_id, sha256)             -- 같은 폴더에 같은 파일 두 번 = 하나
 );
+CREATE TABLE IF NOT EXISTS feedback (       -- 사용자 리포트: 표지 정보, 답변, 숫자가 틀렸을 때
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id     TEXT,
+    kind       TEXT NOT NULL,               -- 'metadata' | 'answer' | 'number' | 'other'
+    message    TEXT NOT NULL,
+    context    TEXT NOT NULL DEFAULT '{}',  -- JSON: 질문, 문장, 기존 값 -> 고친 값
+    created_at TEXT NOT NULL
+);
 """
+
+# 이미 만들어진 app.db에는 CREATE TABLE IF NOT EXISTS가 새 칸을 더하지 않는다.
+# 그래서 칸을 추가할 때는 여기에 적는다 (아주 작은 마이그레이션).
+MIGRATIONS = [("documents", "warning", "TEXT")]
+
+UNFINISHED = ("uploaded", "parsing", "chunking", "indexing", "extracting")
+FEEDBACK_KINDS = ("metadata", "answer", "number", "other")
 
 # 예전 sources.json과 같은 모양의 dict를 돌려준다. 그래서 registry.py를 쓰던 코드는 그대로 동작한다.
 DOC_COLUMNS = """d.doc_id, d.company_id, c.name AS company, c.ticker, d.doc_type, d.fiscal_year, d.period_end,
-    d.file, d.sha256, d.exhibit_start_page, d.source_url, d.filing_url, d.status, d.error"""
+    d.file, d.sha256, d.exhibit_start_page, d.source_url, d.filing_url, d.status, d.error, d.warning, d.updated_at"""
 
 
 def now() -> str:
@@ -67,7 +83,16 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")  # SQLite는 기본값이 OFF다
     conn.executescript(SCHEMA)
+    migrate(conn)
     return conn
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    for table, column, kind in MIGRATIONS:
+        columns = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            with conn:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
 
 def add_company(conn: sqlite3.Connection, company_id: str, name: str, ticker: str | None = None) -> None:
@@ -107,13 +132,50 @@ def check_status(status: str) -> None:
         raise ValueError(f"unknown status '{status}'. allowed: {', '.join(STATUSES)}")
 
 
-def set_status(conn: sqlite3.Connection, doc_id: str, status: str, error: str | None = None) -> None:
+def set_status(conn: sqlite3.Connection, doc_id: str, status: str, error: str | None = None,
+               warning: str | None = None) -> None:
+    """상태를 바꾼다. error와 warning은 매번 새로 쓴다: 다시 처리하면 지난번 메시지는 지워진다."""
     check_status(status)
     with conn:
-        cur = conn.execute("UPDATE documents SET status = ?, error = ?, updated_at = ? WHERE doc_id = ?",
-                           (status, error, now(), doc_id))
+        cur = conn.execute("UPDATE documents SET status = ?, error = ?, warning = ?, updated_at = ? WHERE doc_id = ?",
+                           (status, error, warning, now(), doc_id))
     if cur.rowcount == 0:
         raise KeyError(doc_id)
+
+
+def update_metadata(conn: sqlite3.Connection, doc_id: str, **fields) -> None:
+    """사용자가 표지에서 읽은 값을 고친다. 다시 처리해야 청크의 라벨('FY2025 10-K')에 반영된다."""
+    allowed = {"doc_type", "fiscal_year", "period_end"}
+    if not fields or set(fields) - allowed:
+        raise ValueError(f"can only change: {', '.join(sorted(allowed))}")
+    sets = ", ".join(f"{k} = ?" for k in fields)
+    with conn:
+        cur = conn.execute(f"UPDATE documents SET {sets}, updated_at = ? WHERE doc_id = ?",
+                           (*fields.values(), now(), doc_id))
+    if cur.rowcount == 0:
+        raise KeyError(doc_id)
+
+
+def unfinished(conn: sqlite3.Connection) -> list[str]:
+    """처리가 끝나지 않은 문서. 서버가 꺼질 때 하던 일이다 (고아 작업): 켜질 때 다시 대기열에 넣는다."""
+    marks = ", ".join("?" * len(UNFINISHED))
+    return [r["doc_id"] for r in conn.execute(
+        f"SELECT doc_id FROM documents WHERE status IN ({marks}) ORDER BY created_at", UNFINISHED)]
+
+
+def add_feedback(conn: sqlite3.Connection, kind: str, message: str, doc_id: str | None = None,
+                 context: dict | None = None) -> int:
+    if kind not in FEEDBACK_KINDS:
+        raise ValueError(f"unknown feedback kind '{kind}'")
+    with conn:
+        cur = conn.execute("INSERT INTO feedback (doc_id, kind, message, context, created_at) VALUES (?, ?, ?, ?, ?)",
+                           (doc_id, kind, message, json.dumps(context or {}), now()))
+    return cur.lastrowid
+
+
+def get_company(conn: sqlite3.Connection, company_id: str) -> dict | None:
+    row = conn.execute("SELECT * FROM companies WHERE company_id = ?", (company_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def get_document(conn: sqlite3.Connection, doc_id: str) -> dict | None:

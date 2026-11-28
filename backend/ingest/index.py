@@ -28,9 +28,19 @@ def load_chunks(path: Path) -> list[dict]:
 
 
 def create_collection(client: MilvusClient, name: str) -> None:
-    """컬렉션(= 테이블)을 새로 만든다. 같은 이름이 있으면 지우고 다시 만든다."""
+    """CLI용: 컬렉션(= 테이블)을 처음부터 다시 만든다. 같은 이름이 있으면 지운다.
+
+    업로드 파이프라인은 이 함수를 쓰면 안 된다: 다른 문서들의 청크까지 사라진다 (ensure_collection을 쓴다).
+    """
     if client.has_collection(name):
         client.drop_collection(name)
+    ensure_collection(client, name)
+
+
+def ensure_collection(client: MilvusClient, name: str) -> None:
+    """없을 때만 만든다."""
+    if client.has_collection(name):
+        return
 
     # 스키마: 어떤 필드를 어떤 타입으로 저장할지 미리 정한다 (SQL의 CREATE TABLE과 비슷)
     schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=False)
@@ -41,10 +51,10 @@ def create_collection(client: MilvusClient, name: str) -> None:
     schema.add_field("doc_type", DataType.VARCHAR, max_length=16)  # 필터: 10-K / DEF 14A / 8-K
     schema.add_field("fiscal_year", DataType.INT64)  # 필터: 특정 연도만
     schema.add_field("vector", DataType.FLOAT_VECTOR, dim=DIM)
-    schema.add_field("text", DataType.VARCHAR, max_length=16384)  # 원문. LLM과 화면에 보여줄 것
+    schema.add_field("text", DataType.VARCHAR, max_length=TEXT_BYTES)  # 원문. LLM과 화면에 보여줄 것
     schema.add_field("page", DataType.INT64)
     schema.add_field("section", DataType.VARCHAR, max_length=16)  # body / exhibit: 필터에 쓴다
-    schema.add_field("heading", DataType.VARCHAR, max_length=512)
+    schema.add_field("heading", DataType.VARCHAR, max_length=HEADING_BYTES)
     schema.add_field("type", DataType.VARCHAR, max_length=16)
     schema.add_field("locations", DataType.JSON)  # [{page, bbox}, ...]: 하이라이트에 쓴다
 
@@ -75,10 +85,29 @@ def main(collection: str, chunk_files: list[Path]) -> None:
     client = MilvusClient(DB_PATH)
     create_collection(client, collection)
 
+    client.insert(collection, build_rows(chunks, vectors))
+
+    stats = client.get_collection_stats(collection)
+    print(f"collection '{collection}': {stats['row_count']} rows in {DB_PATH}")
+
+
+HEADING_BYTES, TEXT_BYTES = 512, 16384  # 스키마의 max_length와 같게
+
+
+def fit(value: str, limit: int) -> str:
+    """Milvus VARCHAR의 max_length는 바이트 단위다. UTF-8 글자가 중간에서 잘리지 않게 자른다."""
+    data = value.encode("utf-8")
+    return value if len(data) <= limit else data[:limit].decode("utf-8", errors="ignore")
+
+
+def build_rows(chunks: list[dict], vectors) -> list[dict]:
     # 회사는 청크 파일이 아니라 레지스트리에서 가져온다: 사실의 출처는 한 곳이어야 한다.
     # 그래서 예전에 만든 청크 파일도 다시 청킹하지 않고 그대로 쓸 수 있다
     company_of = {d: get_doc(d)["company_id"] for d in {c["doc_id"] for c in chunks}}
-    rows = [
+    for c in chunks:  # 본문은 자르면 근거가 사라진다: 조용히 자르지 말고 멈춘다
+        if len(c["text"].encode("utf-8")) > TEXT_BYTES:
+            raise ValueError(f"{c['chunk_id']}: text is {len(c['text'].encode('utf-8'))} bytes > {TEXT_BYTES}")
+    return [
         {
             "chunk_id": c["chunk_id"],
             "company_id": company_of[c["doc_id"]],
@@ -90,16 +119,28 @@ def main(collection: str, chunk_files: list[Path]) -> None:
             "text": c["text"],
             "page": c["page"],
             "section": c["section"],
-            "heading": c["heading"] or "",  # VARCHAR 필드는 None을 받지 않는다
+            # VARCHAR 필드는 None을 받지 않는다. 제목은 표시용이라 길면 잘라도 된다
+            "heading": fit(c["heading"] or "", HEADING_BYTES),
             "type": c["type"],
             "locations": c["locations"],
         }
         for c, v in zip(chunks, vectors)
     ]
-    client.insert(collection, rows)
 
-    stats = client.get_collection_stats(collection)
-    print(f"collection '{collection}': {stats['row_count']} rows in {DB_PATH}")
+
+def replace_document(client: MilvusClient, collection: str, doc_id: str, chunks: list[dict], model) -> int:
+    """업로드 파이프라인용: 이 문서의 청크를 지우고 다시 넣는다.
+
+    Milvus는 같은 chunk_id를 insert해도 오류 없이 중복으로 넣는다. 그래서 다시 처리할 때는 먼저 지운다.
+    upsert만 쓰면 다시 파싱해서 청크 수가 줄었을 때 옛 청크가 남는다. 몇 번 돌려도 결과가 같다 (멱등성).
+    """
+    if any(c["doc_id"] != doc_id for c in chunks):
+        raise ValueError("chunks from another document")
+    ensure_collection(client, collection)
+    vectors = model.encode([c["embed_text"] for c in chunks], batch_size=32, normalize_embeddings=True)
+    client.delete(collection, filter=f'doc_id == "{doc_id}"')
+    client.insert(collection, build_rows(chunks, vectors))
+    return len(chunks)
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ DRIVER_QUERIES = {
             "investments in product development",
     "general_admin": "General and administrative expenses {dir} primarily due to employee-related costs",
     "marketing_selling": "Marketing and selling expenses {dir} primarily due to employee-related costs",
+    "sg_a": "Selling, general and administrative expenses {dir} primarily due to employee-related costs",
     "restructuring": "Restructuring charges related to workforce reduction and severance",
     "interest_expense": "Interest expense {dir} due to changes in outstanding debt and senior notes",
     # EPS 브리지의 주식 수 효과

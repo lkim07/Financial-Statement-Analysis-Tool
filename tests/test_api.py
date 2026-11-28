@@ -5,6 +5,7 @@ pytest.importorskip("fastapi")  # CI에서 fastapi가 없으면 건너뛴다
 from fastapi.testclient import TestClient  # noqa: E402
 
 import main  # noqa: E402
+import uploads  # noqa: E402
 from service import Deps  # noqa: E402
 
 REGISTRY = [{"doc_id": "amat-10k-fy2025", "doc_type": "10-K", "fiscal_year": 2025,
@@ -15,11 +16,13 @@ REGISTRY = [{"doc_id": "amat-10k-fy2025", "doc_type": "10-K", "fiscal_year": 202
 def client(monkeypatch):
     main.STATE["deps"] = Deps(embedder=None, milvus=None, llm=None, model="m", router_model="m",
                               collection="test", registry=REGISTRY)
+    uploads.WORKER["worker"] = object()  # 실제 워커(임베딩 모델, Milvus)를 띄우지 않는다
     monkeypatch.setattr(main, "ask", lambda question, deps, k, route, decompose: {
         "question": question, "status": "answered", "k": k, "route": {"docs": [], "decomposed": decompose}})
     with TestClient(main.app) as c:
         yield c
     main.STATE.clear()
+    uploads.WORKER["worker"] = None
 
 
 def test_health(client):

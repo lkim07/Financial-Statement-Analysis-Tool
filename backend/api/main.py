@@ -8,6 +8,7 @@
     GET  /docs/{doc_id}/pdf   PDF 파일 (뷰어가 연다)
     GET  /reports/{doc_id}/summary   핵심 지표 + 순이익 워터폴 (숫자 테이블, LLM 없음)
     POST /ask                 질문 -> 답변 + 출처 + 하이라이트
+    회사 폴더, 업로드, 처리 상태, 피드백: uploads.py (Phase 9)
 """
 
 import os
@@ -22,9 +23,10 @@ from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(Path(__file__).resolve().parent), str(ROOT / "rag"), str(ROOT / "ingest"), str(ROOT / "numbers")]
+import uploads  # noqa: E402
 from service import Deps, ask, report_summary  # noqa: E402
 
-COLLECTION = os.environ.get("COLLECTION", "docs_v2_3")
+COLLECTION = os.environ.get("COLLECTION", "docs_v3")
 STATE: dict = {}
 
 
@@ -46,16 +48,34 @@ def build_deps() -> Deps:
                 router_model=os.environ.get("ROUTER_MODEL") or model, collection=COLLECTION, registry=registry)
 
 
+def refresh_registry(doc_id: str | None = None) -> None:
+    """문서가 ready가 되면 라우터와 문서 목록이 바로 보도록 레지스트리를 다시 읽는다."""
+    from router import load_docs
+    STATE["deps"].registry = load_docs()
+
+
+def build_worker():
+    from pipeline import Worker, real_steps
+    deps = STATE["deps"]
+    w = Worker(real_steps(deps.embedder, deps.milvus, deps.collection), on_ready=refresh_registry)
+    if orphans := w.start():
+        print(f"requeued unfinished uploads: {', '.join(orphans)}")
+    return w
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if STATE.get("deps") is None:  # 테스트는 가짜 Deps를 미리 넣어 둔다
         STATE["deps"] = build_deps()
+    if uploads.WORKER["worker"] is None:  # 테스트는 가짜 워커를 미리 넣어 둔다
+        uploads.WORKER["worker"] = build_worker()
     yield
     for pdf in STATE["deps"].pdfs.values():
         pdf.close()
 
 
 app = FastAPI(title="Evidence-Based Financial Report Analyst", lifespan=lifespan)
+app.include_router(uploads.router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://localhost:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 
